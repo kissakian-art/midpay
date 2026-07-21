@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "MidPay",
+    "slug": "midpay",
+    "owner": "kissa-kian",
+    "version": "0.1.0",
+    "scheme": "midpay",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#000000",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.kissakian.midpay"
+    },
+    "android": {
+      "package": "com.kissakian.midpay",
+      "adaptiveIcon": {
+        "backgroundColor": "#000000",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-video"
+    ],
+    "extra": {
+      "apiUrl": "https://midpay-backend.midpay.workers.dev"
+    }
+  }
+}

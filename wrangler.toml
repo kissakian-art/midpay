@@ -1,0 +1,61 @@
+# Cloudflare Workers configuration — Phase 1 backend (§2.4)
+name = "midpay-backend"
+main = "src/index.ts"
+compatibility_date = "2025-07-01"
+compatibility_flags = ["nodejs_compat"]
+
+# --- D1: primary datastore (§2.4). Core relational state + financial ledger only. ---
+# Run `wrangler d1 create midpay` and paste the returned database_id below.
+[[d1_databases]]
+binding = "DB"
+database_name = "midpay"
+database_id = "d8b4a6c5-e94c-4164-a752-390e9302644c"
+migrations_dir = "drizzle/migrations"
+
+# --- Durable Objects: live chat, reactions, tipping signals (§2.4). ---
+# High-frequency realtime signals live here, NEVER in D1. Stubbed for Phase 1 —
+# uncomment and implement when wiring live streaming realtime.
+# [[durable_objects.bindings]]
+# name = "LIVE_ROOM"
+# class_name = "LiveRoom"
+
+# --- R2: media storage — video, images, live replays (§2.2). Never the DB. ---
+# Local dev uses a simulated bucket automatically. For remote/deploy you must
+# first enable R2 in the Cloudflare dashboard, then: wrangler r2 bucket create midpay-media
+[[r2_buckets]]
+binding = "MEDIA"
+bucket_name = "midpay-media"
+
+[vars]
+# 'development' enables dev conveniences (e.g. OTP code echoed in the response
+# for testing without SMS). Set to 'production' before going live.
+ENVIRONMENT = "development"
+
+# Business-rule config constants (§3.3, §7.2). These are DEFAULTS only.
+# The live/effective values are stored in the versioned `platform_config` table
+# (see src/db/schema/admin.ts) so the owner can tune them from the admin console
+# without a redeploy. Amounts are in whole UGX.
+LIVE_MIN_PRICE_PER_HOUR = "5000"
+STREAMING_COST_PER_VIEWER_MINUTE = "15"
+RECORDED_PRICE_FLOOR = "5000"
+LIVE_AUTO_TERMINATE_GRACE_MINUTES = "5"
+CLIP_MAX_LENGTH_SECONDS = "300"
+FLUTTERWAVE_FEE_PERCENT = "3"
+MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT = "0.5"
+# Minimum available balance (UGX) for a creator to be included in a payout batch
+# (§7.5). Owner-tunable; 0 pays everyone with a positive balance.
+MIN_PAYOUT_THRESHOLD_UGX = "0"
+# Monthly fixed operating cost the platform must cover — the self-funding
+# break-even target (§6.3). ~$3,000 ≈ 11,100,000 UGX at ~3,700 UGX/$.
+MONTHLY_OPEX_TARGET_UGX = "11100000"
+# 1 = OTP codes are required at login; 0 = verification bypassed (any code
+# accepted — DEVELOPMENT ONLY). Admin-tunable via /admin/config; set to 1
+# before launch.
+PHONE_VERIFICATION_ENABLED = "1"
+
+# --- Secrets (NOT stored here) ---
+# Set these with `wrangler secret put <NAME>` for production, and in a local
+# `.dev.vars` file (gitignored) for `wrangler dev`. See .dev.vars.example.
+#   JWT_SECRET          - signs session tokens (required)
+#   FLW_SECRET_KEY      - Flutterwave API secret key (payments; optional in dev)
+#   FLW_WEBHOOK_HASH    - Flutterwave webhook verify-hash (payments; optional in dev)

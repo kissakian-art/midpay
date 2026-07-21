@@ -1,0 +1,26 @@
+{
+  "name": "midpay-backend",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Phase 1 backend for the premium pay-per-view video/live platform (Uganda). Cloudflare Workers + D1 + Drizzle.",
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "typecheck": "tsc --noEmit",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate:local": "wrangler d1 migrations apply midpay --local",
+    "db:migrate:remote": "wrangler d1 migrations apply midpay --remote",
+    "db:studio": "drizzle-kit studio"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^5.20260714.1",
+    "drizzle-kit": "^0.31.4",
+    "typescript": "^5.9.2",
+    "wrangler": "^4.28.1"
+  },
+  "dependencies": {
+    "drizzle-orm": "^0.44.4",
+    "hono": "^4.9.0"
+  }
+}

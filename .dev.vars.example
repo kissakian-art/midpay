@@ -1,0 +1,10 @@
+# Copy to `.dev.vars` (gitignored) for `wrangler dev`. Do NOT commit .dev.vars.
+# For production, set each with: wrangler secret put <NAME>
+
+# Required — signs session JWTs. Use a long random string.
+JWT_SECRET="dev-only-change-me-to-a-long-random-string"
+
+# Optional in dev — payments run in simulated mode until these are set.
+# Get these from your Flutterwave dashboard when wiring real payments.
+FLW_SECRET_KEY=""
+FLW_WEBHOOK_HASH=""

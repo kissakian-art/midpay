@@ -1,0 +1,20 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1784640099098,
+      "tag": "0000_odd_cammi",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1784642770578,
+      "tag": "0001_friendly_bloodstorm",
+      "breakpoints": true
+    }
+  ]
+}

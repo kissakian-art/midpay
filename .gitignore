@@ -1,0 +1,8 @@
+node_modules/
+dist/
+.wrangler/
+.dev.vars
+*.log
+
+# Drizzle generated migrations are committed; local D1 state is not.
+.mf/
