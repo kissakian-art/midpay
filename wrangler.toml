@@ -26,6 +26,11 @@ migrations_dir = "drizzle/migrations"
 binding = "MEDIA"
 bucket_name = "midpay-media"
 
+# Cron: the §3.3 auto-terminate sweep — ends any live stream that has overrun
+# its declared duration + grace. Every 2 minutes.
+[triggers]
+crons = ["*/2 * * * *"]
+
 [vars]
 # 'development' enables dev conveniences (e.g. OTP code echoed in the response
 # for testing without SMS). Set to 'production' before going live.

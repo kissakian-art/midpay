@@ -24,8 +24,32 @@ adminRoutes.post("/auth/login", async (c) => {
   const result = await c.get("container").adminAuth.login(
     requireString(body, "email"),
     requireString(body, "password"),
+    typeof body.totpCode === "string" ? body.totpCode : undefined,
   );
   return c.json(result);
+});
+
+adminRoutes.post("/auth/change-password", requireAdmin, async (c) => {
+  const body = await readJson(c);
+  const result = await c.get("container").adminAuth.changePassword(
+    c.get("adminId"),
+    requireString(body, "currentPassword"),
+    requireString(body, "newPassword"),
+  );
+  return c.json(result);
+});
+
+// 2FA enrollment (§7.1): setup → scan QR → enable with a live code.
+adminRoutes.post("/2fa/setup", requireAdmin, async (c) => {
+  return c.json(await c.get("container").adminAuth.setupTotp(c.get("adminId")));
+});
+adminRoutes.post("/2fa/enable", requireAdmin, async (c) => {
+  const body = await readJson(c);
+  return c.json(await c.get("container").adminAuth.enableTotp(c.get("adminId"), requireString(body, "code")));
+});
+adminRoutes.post("/2fa/disable", requireAdmin, async (c) => {
+  const body = await readJson(c);
+  return c.json(await c.get("container").adminAuth.disableTotp(c.get("adminId"), requireString(body, "code")));
 });
 
 adminRoutes.get("/me", requireAdmin, async (c) => {

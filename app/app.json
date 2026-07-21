@@ -30,7 +30,10 @@
       "expo-video"
     ],
     "extra": {
-      "apiUrl": "https://midpay-backend.midpay.workers.dev"
+      "apiUrl": "https://midpay-backend.midpay.workers.dev",
+      "eas": {
+        "projectId": "ee16880d-4894-426d-a47e-898b01363ed9"
+      }
     }
   }
 }

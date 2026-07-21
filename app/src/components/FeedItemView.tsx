@@ -1,8 +1,10 @@
+import * as ScreenCapture from "expo-screen-capture";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -43,6 +45,19 @@ export default function FeedItemView({ item, active, height, onOpenComments, onM
     if (active && unlocked) player.play();
     else player.pause();
   }, [active, unlocked, player]);
+
+  // §4.4 content protection: while a PAID video is on screen, block screen
+  // capture (FLAG_SECURE on Android / capture detection on iOS). Free content
+  // stays capturable by design — it's the shareable marketing surface.
+  useEffect(() => {
+    if (Platform.OS === "web") return;
+    if (item.pricing !== "paid" || !unlocked || !active) return;
+    const tag = `paid-${item.id}`;
+    ScreenCapture.preventScreenCaptureAsync(tag).catch(() => {});
+    return () => {
+      ScreenCapture.allowScreenCaptureAsync(tag).catch(() => {});
+    };
+  }, [item.pricing, item.id, unlocked, active]);
 
   const buy = async () => {
     setBuying(true);

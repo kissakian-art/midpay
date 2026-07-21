@@ -33,4 +33,8 @@ export class AdminRepository {
   touchLogin(id: string, now: Date): Promise<unknown> {
     return this.db.update(adminUsers).set({ lastLoginAt: now }).where(eq(adminUsers.id, id)).run();
   }
+
+  update(id: string, patch: Partial<AdminUser>): Promise<AdminUser | undefined> {
+    return this.db.update(adminUsers).set(patch).where(eq(adminUsers.id, id)).returning().get();
+  }
 }

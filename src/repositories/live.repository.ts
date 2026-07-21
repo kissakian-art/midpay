@@ -13,6 +13,10 @@ export class LiveRepository {
     return this.db.insert(liveEvents).values(row).returning().get();
   }
 
+  listByStatus(status: LiveEvent["status"]): Promise<LiveEvent[]> {
+    return this.db.select().from(liveEvents).where(eq(liveEvents.status, status)).all();
+  }
+
   listByCreator(creatorId: string): Promise<LiveEvent[]> {
     return this.db
       .select()

@@ -67,6 +67,14 @@ export class ConfigService {
     return this.getNumber("MONTHLY_OPEX_TARGET_UGX", this.env.MONTHLY_OPEX_TARGET_UGX);
   }
 
+  /** Live auto-terminate grace period, minutes (§3.3). */
+  liveGraceMinutes(): Promise<number> {
+    return this.getNumber(
+      "LIVE_AUTO_TERMINATE_GRACE_MINUTES",
+      this.env.LIVE_AUTO_TERMINATE_GRACE_MINUTES,
+    );
+  }
+
   /** Is phone-OTP verification required at login? (0 = dev bypass.) */
   async phoneVerificationEnabled(): Promise<boolean> {
     return (
