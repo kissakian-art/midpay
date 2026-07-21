@@ -27,7 +27,21 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-video"
+      "expo-video",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MidPay uses the camera to record and film your posts.",
+          "microphonePermission": "MidPay uses the microphone to record audio for your videos.",
+          "recordAudioAndroid": true
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MidPay needs access to your library to upload existing videos."
+        }
+      ]
     ],
     "extra": {
       "apiUrl": "https://midpay-backend.midpay.workers.dev",

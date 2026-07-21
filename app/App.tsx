@@ -10,7 +10,7 @@ import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import ProfileScreen from "./src/screens/ProfileScreen";
-import UploadScreen from "./src/screens/UploadScreen";
+import StudioScreen from "./src/screens/StudioScreen";
 import { colors } from "./src/theme";
 
 const Tab = createBottomTabNavigator();
@@ -33,7 +33,7 @@ function Tabs() {
       }}
     >
       <Tab.Screen name="FeedTab" component={FeedScreen} options={{ title: "Feed", tabBarIcon: tabIcon("🎬") }} />
-      <Tab.Screen name="UploadTab" component={UploadScreen} options={{ title: "Create", tabBarIcon: tabIcon("➕") }} />
+      <Tab.Screen name="UploadTab" component={StudioScreen} options={{ title: "Create", tabBarIcon: tabIcon("➕") }} />
       <Tab.Screen name="InboxTab" component={InboxScreen} options={{ title: "Inbox", tabBarIcon: tabIcon("💬") }} />
       <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: "Me", tabBarIcon: tabIcon("👤") }} />
     </Tab.Navigator>
