@@ -6,6 +6,9 @@ export interface Env {
   // D1 primary datastore (§2.4).
   DB: D1Database;
 
+  // Durable Objects: one LiveRoom per live event — chat/reactions/presence (§2.4).
+  LIVE_ROOM: DurableObjectNamespace;
+
   // R2 media bucket (§2.2) — video, images, live replays. Never the DB.
   MEDIA: R2Bucket;
 

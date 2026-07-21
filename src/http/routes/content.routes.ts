@@ -7,10 +7,12 @@ import { optionalInt, optionalString, readJson } from "../util";
 export const contentRoutes = new Hono<AppEnv>();
 
 // Public — the global feed (newest published first). ?limit=20&before=<unixSec>
+// A valid bearer token (optional) decorates paid items with `owned`.
 contentRoutes.get("/feed", async (c) => {
   const limit = Number(c.req.query("limit") ?? 20) || 20;
   const before = c.req.query("before") ? Number(c.req.query("before")) : undefined;
-  return c.json({ feed: await c.get("container").content.feed(limit, before) });
+  const viewerId = await getOptionalUserId(c);
+  return c.json({ feed: await c.get("container").content.feed(limit, before, viewerId) });
 });
 
 // Public — fetch a single content item's metadata.

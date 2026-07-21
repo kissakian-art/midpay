@@ -12,12 +12,16 @@ database_name = "midpay"
 database_id = "d8b4a6c5-e94c-4164-a752-390e9302644c"
 migrations_dir = "drizzle/migrations"
 
-# --- Durable Objects: live chat, reactions, tipping signals (§2.4). ---
-# High-frequency realtime signals live here, NEVER in D1. Stubbed for Phase 1 —
-# uncomment and implement when wiring live streaming realtime.
-# [[durable_objects.bindings]]
-# name = "LIVE_ROOM"
-# class_name = "LiveRoom"
+# --- Durable Objects: live chat, reactions, presence (§2.4). ---
+# High-frequency realtime signals live here, NEVER in D1. One LiveRoom per
+# live event (WebSocket hibernation — idle rooms cost nothing).
+[[durable_objects.bindings]]
+name = "LIVE_ROOM"
+class_name = "LiveRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["LiveRoom"]
 
 # --- R2: media storage — video, images, live replays (§2.2). Never the DB. ---
 # Local dev uses a simulated bucket automatically. For remote/deploy you must

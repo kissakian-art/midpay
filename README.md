@@ -195,7 +195,16 @@ applicable; all verified end-to-end against local D1 + R2.
   `wrangler r2 bucket create midpay-media`. Local dev already simulates it.
 - **Real SMS + Flutterwave keys** — swap the dev OTP logger for an SMS provider;
   set `FLW_SECRET_KEY` / `FLW_WEBHOOK_HASH` for live payments and payouts.
-- **Admin 2FA** — §7.1 mandates TOTP for admins; columns exist, enforcement TODO.
-- **Durable Object** for live chat/reactions/tips (§2.4).
-- **Auto-terminate job** — a cron Worker to end live streams at declared
-  duration + grace (§3.3); today the runtime cap is enforced only on manual end.
+- **Durable Object** for live chat/reactions/tips (§2.4) + a live-streaming
+  SDK (Agora/ZEGOCLOUD — needs an account) wired into the app.
+- **App-side native features** (need an EAS development build): face blur
+  (§4.3), on-device HEVC encoding ladder (§2.2), watermarking on free
+  downloads (§4.4). Screen-capture blocking on paid videos is DONE
+  (expo-screen-capture). Entitlement check on feed load (paid items show
+  locked after app restart until Unlock is tapped) is a known polish item.
+
+## Done since (admin security + §3.3 cap)
+
+`POST /admin/auth/change-password`; TOTP 2FA (`/admin/2fa/setup|enable|disable`,
+login takes `totpCode` once enabled); cron trigger (every 2 min) auto-terminates
+overrun lives at declared duration + grace, audit-logged.

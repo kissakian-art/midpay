@@ -177,10 +177,22 @@ export class ContentService {
     return item;
   }
 
-  /** Global feed (newest published first) with simple time cursor. */
-  feed(limit = 20, beforeSec?: number) {
+  /**
+   * Global feed (newest published first) with simple time cursor. When a
+   * signed-in viewer is known, each paid item is decorated with `owned` so the
+   * client can render it unlocked immediately (no lock flash after restart).
+   */
+  async feed(limit = 20, beforeSec?: number, viewerUserId?: string | null) {
     const cap = Math.min(Math.max(limit, 1), 50);
-    return this.content.listFeed(cap, beforeSec ? new Date(beforeSec * 1000) : undefined);
+    const items = await this.content.listFeed(
+      cap,
+      beforeSec ? new Date(beforeSec * 1000) : undefined,
+    );
+    if (!viewerUserId) return items.map((it) => ({ ...it, owned: false }));
+
+    const paidIds = items.filter((it) => it.pricing === "paid").map((it) => it.id);
+    const ownedIds = await this.entitlements.listActiveContentIds(viewerUserId, paidIds);
+    return items.map((it) => ({ ...it, owned: ownedIds.has(it.id) }));
   }
 
   // --- Media (R2) ---------------------------------------------------------

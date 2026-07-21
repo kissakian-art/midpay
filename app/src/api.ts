@@ -64,6 +64,8 @@ export interface FeedItem {
   description: string | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
+  /** True when the signed-in viewer already bought this paid item. */
+  owned: boolean;
   likeCount: number;
   commentCount: number;
   purchaseCount: number;

@@ -2,6 +2,8 @@ import { createApp } from "./http/app";
 import type { Env } from "./env";
 import { terminateOverrunLives } from "./jobs/terminate-overrun-lives";
 
+export { LiveRoom } from "./realtime/live-room";
+
 /**
  * Worker entry point (§2.4). Delegates to the Hono app, which wires the
  * repository/service layers per request. The scheduled handler runs the §3.3

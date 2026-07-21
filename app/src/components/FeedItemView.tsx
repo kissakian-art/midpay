@@ -26,7 +26,7 @@ interface Props {
  * behind a buy overlay), with the right-rail actions (like/comment/DM).
  */
 export default function FeedItemView({ item, active, height, onOpenComments, onMessageCreator }: Props) {
-  const [unlocked, setUnlocked] = useState(item.pricing === "free");
+  const [unlocked, setUnlocked] = useState(item.pricing === "free" || item.owned);
   const [buying, setBuying] = useState(false);
   const [liked, setLiked] = useState(false);
   const [likeCount, setLikeCount] = useState(item.likeCount);

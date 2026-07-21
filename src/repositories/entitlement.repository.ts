@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { entitlements, type Entitlement } from "../db/schema";
 
@@ -33,6 +33,23 @@ export class EntitlementRepository {
         ),
       )
       .get();
+  }
+
+  /** Which of these content ids does the user actively own? (feed decoration) */
+  async listActiveContentIds(userId: string, contentIds: string[]): Promise<Set<string>> {
+    if (contentIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ contentId: entitlements.contentId })
+      .from(entitlements)
+      .where(
+        and(
+          eq(entitlements.userId, userId),
+          eq(entitlements.status, "active"),
+          inArray(entitlements.contentId, contentIds),
+        ),
+      )
+      .all();
+    return new Set(rows.map((r) => r.contentId).filter((id): id is string => !!id));
   }
 
   /** Revoke all entitlements for a hard-deleted content item (§4.5.5). */
