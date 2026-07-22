@@ -20,7 +20,7 @@ import {
 import { ApiError, applyCreator, createContent, publishContent, uploadMedia } from "../api";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
-import { bakeFilterIntoPhoto, isSkiaAvailable } from "../studio/skiaFilter";
+import { bakeFilterIntoPhoto } from "../studio/skiaFilter";
 
 interface Capture {
   uri: string;
@@ -157,9 +157,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         </TouchableOpacity>
       </View>
 
-      {!isSkiaAvailable() ? (
-        <Text style={s.devNote}>Filters preview here; they bake into the file in the installed app.</Text>
-      ) : null}
+      <Text style={s.devNote}>Filter baking arrives in an update — capture &amp; posting work now.</Text>
 
       {/* Filter carousel */}
       <View style={s.filterBar}>
@@ -216,7 +214,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           )}
           {capture && !capture.filtered && filter.id !== "none" ? (
             <Text style={s.reviewWarn}>
-              Filter “{filter.name}” selected — it bakes in on the installed app build.
+              “{filter.name}” selected — filter baking is coming in an update; posting works now.
             </Text>
           ) : null}
 

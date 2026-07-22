@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { AuthProvider, useAuth } from "./src/auth";
+import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import ConversationScreen from "./src/screens/ConversationScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
@@ -73,16 +74,18 @@ function Root() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <NavigationContainer
+    <ErrorBoundary>
+      <AuthProvider>
+        <NavigationContainer
         theme={{
           ...DarkTheme,
           colors: { ...DarkTheme.colors, background: colors.bg, card: colors.bg, primary: colors.accent },
         }}
       >
-        <StatusBar style="light" />
-        <Root />
-      </NavigationContainer>
-    </AuthProvider>
+          <StatusBar style="light" />
+          <Root />
+        </NavigationContainer>
+      </AuthProvider>
+    </ErrorBoundary>
   );
 }
