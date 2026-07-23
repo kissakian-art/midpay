@@ -106,8 +106,8 @@ function readPricing(body: Record<string, unknown>): "free" | "paid" | undefined
 contentRoutes.post("/", async (c) => {
   const body = await readJson(c);
   const kindRaw = optionalString(body, "kind");
-  if (kindRaw !== undefined && kindRaw !== "video" && kindRaw !== "photo") {
-    throw badRequest("bad_kind", "kind must be 'video' or 'photo'");
+  if (kindRaw !== undefined && kindRaw !== "video" && kindRaw !== "photo" && kindRaw !== "text") {
+    throw badRequest("bad_kind", "kind must be 'video', 'photo' or 'text'");
   }
   const item = await c.get("container").content.create(c.get("userId"), {
     kind: kindRaw,

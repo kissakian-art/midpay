@@ -59,7 +59,7 @@ export interface User {
 
 export interface FeedItem {
   id: string;
-  kind: "video" | "photo";
+  kind: "video" | "photo" | "text";
   title: string | null;
   description: string | null;
   pricing: "free" | "paid";
@@ -136,8 +136,9 @@ export const addComment = (contentId: string, body: string, parentId?: string) =
 export const applyCreator = () => req("/creators/apply", { method: "POST" });
 
 export const createContent = (input: {
-  kind: "video" | "photo";
+  kind: "video" | "photo" | "text";
   title: string;
+  description?: string;
   pricing: "free" | "paid";
   priceUgx?: number;
   durationSeconds?: number;

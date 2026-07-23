@@ -8,7 +8,7 @@ import { validateRecordedPrice } from "./pricing";
 import { StorageService } from "./storage/storage.service";
 
 export interface CreateContentInput {
-  kind?: "video" | "photo";
+  kind?: "video" | "photo" | "text";
   title?: string;
   description?: string;
   r2Key?: string;

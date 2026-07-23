@@ -15,7 +15,9 @@ export const content = sqliteTable(
     id: uuidPk(),
     creatorId: uuidRef("creator_id").notNull(),
 
-    kind: text("kind", { enum: ["video", "photo"] })
+    // "text" posts carry no media — the body lives in `description` and no
+    // r2Key is set (§ status-style posts alongside video/photo).
+    kind: text("kind", { enum: ["video", "photo", "text"] })
       .notNull()
       .default("video"),
     title: text("title"),

@@ -103,7 +103,11 @@ export default function FeedItemView({ item, active, height, onOpenComments, onM
 
   return (
     <View style={[s.cell, { height }]}>
-      {unlocked ? (
+      {item.kind === "text" && unlocked ? (
+        <View style={s.textPost}>
+          <Text style={s.textPostBody}>{item.description ?? item.title}</Text>
+        </View>
+      ) : unlocked ? (
         <VideoView player={player} style={s.video} contentFit="cover" nativeControls={false} />
       ) : (
         <View style={s.locked}>
@@ -154,6 +158,15 @@ export default function FeedItemView({ item, active, height, onOpenComments, onM
 const s = StyleSheet.create({
   cell: { width: "100%", backgroundColor: colors.bg },
   video: { flex: 1 },
+  textPost: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 28,
+    paddingBottom: 90,
+    backgroundColor: "#111",
+  },
+  textPostBody: { color: "#fff", fontSize: 22, lineHeight: 31, fontWeight: "600", textAlign: "center" },
   locked: {
     flex: 1,
     alignItems: "center",
