@@ -1,21 +1,26 @@
+import * as ImagePicker from "expo-image-picker";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
   FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
   RefreshControl,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   useWindowDimensions,
   View,
 } from "react-native";
 import {
-  ApiError,
-  applyCreator,
   follow,
   profile as fetchProfile,
   unfollow,
+  updateProfile,
+  uploadAvatar,
   userContent,
   type FeedItem,
   type PublicProfile,
@@ -46,6 +51,12 @@ export default function UserProfileScreen({ route, navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [following, setFollowing] = useState(false);
+
+  // Edit-profile state
+  const [editing, setEditing] = useState(false);
+  const [draftName, setDraftName] = useState("");
+  const [draftBio, setDraftBio] = useState("");
+  const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!targetId) return;
@@ -84,16 +95,47 @@ export default function UserProfileScreen({ route, navigation }: any) {
     }
   };
 
-  const becomeCreator = async () => {
+  const openEditor = () => {
+    setDraftName(prof?.displayName ?? "");
+    setDraftBio(prof?.bio ?? "");
+    setEditing(true);
+  };
+
+  const changePhoto = async () => {
     try {
-      await applyCreator();
-      Alert.alert("You're a creator!", "Create your first post from the + tab.");
-    } catch (e) {
-      if (e instanceof ApiError && e.code === "already_creator") {
-        Alert.alert("Already a creator", "Create posts from the + tab.");
-      } else {
-        Alert.alert("Failed", e instanceof Error ? e.message : "Try again");
+      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (!perm.granted) {
+        Alert.alert("Permission needed", "Allow photo access to pick a profile picture.");
+        return;
       }
+      const r = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.85,
+      });
+      if (r.canceled || !r.assets[0]) return;
+      setSaving("Uploading photo…");
+      const asset = r.assets[0];
+      await uploadAvatar(asset.uri, asset.mimeType ?? "image/jpeg");
+      await load();
+    } catch (e) {
+      Alert.alert("Upload failed", e instanceof Error ? e.message : "Try again");
+    } finally {
+      setSaving(null);
+    }
+  };
+
+  const saveProfile = async () => {
+    try {
+      setSaving("Saving…");
+      await updateProfile({ displayName: draftName.trim(), bio: draftBio.trim() });
+      setEditing(false);
+      await load();
+    } catch (e) {
+      Alert.alert("Couldn't save", e instanceof Error ? e.message : "Try again");
+    } finally {
+      setSaving(null);
     }
   };
 
@@ -107,7 +149,16 @@ export default function UserProfileScreen({ route, navigation }: any) {
 
   const header = (
     <View style={s.header}>
-      <Avatar handle={prof?.handle} displayName={prof?.displayName} size={96} />
+      <TouchableOpacity onPress={isSelf ? changePhoto : undefined} activeOpacity={isSelf ? 0.7 : 1}>
+        <Avatar
+          handle={prof?.handle}
+          displayName={prof?.displayName}
+          userId={prof?.id}
+          avatarKey={prof?.avatarR2Key}
+          size={96}
+        />
+        {isSelf ? <Text style={s.changePhoto}>Change photo</Text> : null}
+      </TouchableOpacity>
       <Text style={s.name}>{prof?.displayName || prof?.handle || "—"}</Text>
       <Text style={s.handle}>@{prof?.handle}</Text>
 
@@ -120,9 +171,11 @@ export default function UserProfileScreen({ route, navigation }: any) {
       <View style={s.actions}>
         {isSelf ? (
           <>
-            <TouchableOpacity style={s.primaryBtn} onPress={becomeCreator}>
+            {/* No "become creator" button: posting auto-creates the creator
+                profile, so it was redundant and crowded the row. */}
+            <TouchableOpacity style={s.primaryBtn} onPress={openEditor}>
               <Text style={s.primaryBtnText} numberOfLines={1}>
-                Become creator
+                Edit profile
               </Text>
             </TouchableOpacity>
             <TouchableOpacity style={s.iconBtn} onPress={logout}>
@@ -201,6 +254,66 @@ export default function UserProfileScreen({ route, navigation }: any) {
           </View>
         )}
       />
+
+      {saving ? (
+        <View style={s.savingOverlay}>
+          <ActivityIndicator color={colors.accent} size="large" />
+          <Text style={s.savingText}>{saving}</Text>
+        </View>
+      ) : null}
+
+      {/* Edit profile */}
+      <Modal visible={editing} animationType="slide" onRequestClose={() => setEditing(false)}>
+        <KeyboardAvoidingView
+          style={s.editRoot}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        >
+          <Text style={s.editTitle}>Edit profile</Text>
+
+          <TouchableOpacity style={s.editAvatarRow} onPress={changePhoto}>
+            <Avatar
+              handle={prof?.handle}
+              displayName={prof?.displayName}
+              userId={prof?.id}
+              avatarKey={prof?.avatarR2Key}
+              size={72}
+            />
+            <Text style={s.editAvatarLabel}>Tap to change photo</Text>
+          </TouchableOpacity>
+
+          <Text style={s.label}>Display name</Text>
+          <TextInput
+            style={s.input}
+            value={draftName}
+            onChangeText={setDraftName}
+            placeholder="Your name"
+            placeholderTextColor={colors.dim}
+            maxLength={40}
+          />
+          <Text style={s.hint}>{draftName.length}/40</Text>
+
+          <Text style={s.label}>Bio</Text>
+          <TextInput
+            style={[s.input, s.bioInput]}
+            value={draftBio}
+            onChangeText={setDraftBio}
+            placeholder="Tell people what you do"
+            placeholderTextColor={colors.dim}
+            multiline
+            maxLength={200}
+          />
+          <Text style={s.hint}>{draftBio.length}/200</Text>
+
+          <View style={s.editActions}>
+            <TouchableOpacity style={s.iconBtn} onPress={() => setEditing(false)}>
+              <Text style={s.iconBtnText}>Cancel</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={s.primaryBtn} onPress={saveProfile} disabled={!!saving}>
+              <Text style={s.primaryBtnText}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </View>
   );
 }
@@ -282,6 +395,36 @@ const s = StyleSheet.create({
     borderRadius: 4,
     overflow: "hidden",
   },
+  changePhoto: { color: colors.accent, fontSize: 11, fontWeight: "700", textAlign: "center", marginTop: 6 },
+  savingOverlay: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  savingText: { color: colors.text, marginTop: 12 },
+  editRoot: { flex: 1, backgroundColor: colors.bg, padding: 20, paddingTop: 60 },
+  editTitle: { color: colors.text, fontSize: 24, fontWeight: "800", marginBottom: 20 },
+  editAvatarRow: { alignItems: "center", marginBottom: 22 },
+  editAvatarLabel: { color: colors.accent, fontWeight: "700", marginTop: 8, fontSize: 13 },
+  label: { color: colors.dim, fontSize: 12, fontWeight: "700", marginBottom: 6 },
+  input: {
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    color: colors.text,
+    fontSize: 16,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  bioInput: { height: 96, textAlignVertical: "top" },
+  hint: { color: colors.dim, fontSize: 11, textAlign: "right", marginTop: 4, marginBottom: 14 },
+  editActions: { flexDirection: "row", gap: 12, marginTop: 10 },
   gridLikes: {
     position: "absolute",
     bottom: 6,

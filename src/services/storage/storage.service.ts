@@ -23,6 +23,12 @@ export class StorageService {
     return `content/${contentId}/thumb/${crypto.randomUUID()}`;
   }
 
+  /** Profile picture key. Namespaced per user; a new uuid each upload so CDN
+   *  caches never serve a stale avatar. */
+  avatarKey(userId: string): string {
+    return `users/${userId}/avatar/${crypto.randomUUID()}`;
+  }
+
   async put(
     key: string,
     body: ReadableStream | ArrayBuffer,

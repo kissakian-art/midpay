@@ -7,6 +7,7 @@ export interface FeedItem extends Content {
   creatorHandle: string;
   creatorDisplayName: string | null;
   creatorUserId: string;
+  creatorAvatarR2Key: string | null;
 }
 
 /**
@@ -125,6 +126,7 @@ export class ContentRepository {
         creatorHandle: users.handle,
         creatorDisplayName: users.displayName,
         creatorUserId: users.id,
+        creatorAvatarR2Key: users.avatarR2Key,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))

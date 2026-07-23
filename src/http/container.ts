@@ -30,6 +30,7 @@ import { SocialService } from "../services/social.service";
 import { FlutterwaveClient } from "../services/payments/flutterwave";
 import { PaymentsService } from "../services/payments/payments.service";
 import { PayoutService } from "../services/payout.service";
+import { ProfileService } from "../services/profile.service";
 import { StorageService } from "../services/storage/storage.service";
 
 /**
@@ -52,6 +53,7 @@ export interface Container {
   configAdmin: ConfigAdminService;
   analytics: AnalyticsService;
   social: SocialService;
+  profile: ProfileService;
   messaging: MessagingService;
 }
 
@@ -100,6 +102,7 @@ export function createContainer(env: Env): Container {
   const configAdmin = new ConfigAdminService(configRepo, audit, env);
   const analytics = new AnalyticsService(analyticsRepo, config);
   const social = new SocialService(socialRepo, users, contentRepo, creators);
+  const profile = new ProfileService(users, storage);
   const messaging = new MessagingService(messagingRepo, users);
 
   return {
@@ -118,5 +121,6 @@ export function createContainer(env: Env): Container {
     analytics,
     social,
     messaging,
+    profile,
   };
 }

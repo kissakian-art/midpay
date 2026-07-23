@@ -16,4 +16,8 @@ export class UserRepository {
   create(row: NewUser): Promise<User> {
     return this.db.insert(users).values(row).returning().get();
   }
+
+  update(id: string, patch: Partial<User>): Promise<User | undefined> {
+    return this.db.update(users).set(patch).where(eq(users.id, id)).returning().get();
+  }
 }

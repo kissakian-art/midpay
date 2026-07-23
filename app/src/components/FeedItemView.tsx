@@ -174,7 +174,13 @@ export default function FeedItemView({
         {/* Creator avatar with the TikTok-style follow shortcut */}
         <View style={s.avatarWrap}>
           <TouchableOpacity onPress={() => onOpenProfile(item)} activeOpacity={0.8}>
-            <Avatar handle={item.creatorHandle} displayName={item.creatorDisplayName} size={48} />
+            <Avatar
+              handle={item.creatorHandle}
+              displayName={item.creatorDisplayName}
+              userId={item.creatorUserId}
+              avatarKey={item.creatorAvatarR2Key}
+              size={48}
+            />
           </TouchableOpacity>
           {!isSelf ? (
             <TouchableOpacity

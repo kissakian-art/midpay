@@ -73,6 +73,7 @@ export interface FeedItem {
   creatorHandle: string;
   creatorDisplayName: string | null;
   creatorUserId: string;
+  creatorAvatarR2Key?: string | null;
 }
 
 export interface CommentItem {
@@ -205,6 +206,33 @@ export interface PublicProfile {
 /** A user's published posts, for the profile grid. */
 export const userContent = (userId: string) =>
   req<{ content: FeedItem[] }>(`/users/${userId}/content`);
+
+/**
+ * Public avatar URL. `version` (the avatarR2Key) busts the cache the instant a
+ * user uploads a new picture — the URL itself is stable.
+ */
+export const avatarUrl = (userId: string, version?: string | null) =>
+  `${API_URL}/users/${userId}/avatar${version ? `?v=${encodeURIComponent(version.slice(-12))}` : ""}`;
+
+export const updateProfile = (input: { displayName?: string | null; bio?: string | null }) =>
+  req<{ user: { id: string; displayName: string | null; bio: string | null; avatarR2Key: string | null } }>(
+    "/users/me",
+    { method: "PATCH", json: input },
+  );
+
+export async function uploadAvatar(fileUri: string, contentType = "image/jpeg") {
+  const blob = await (await fetch(fileUri)).blob();
+  const res = await fetch(`${API_URL}/users/me/avatar`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "content-type": contentType },
+    body: blob,
+  });
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+    throw new ApiError(res.status, body.error ?? "upload_failed", body.message ?? "Avatar upload failed");
+  }
+  return (await res.json()) as { user: { avatarR2Key: string | null } };
+}
 
 export const profile = (userId: string) =>
   req<{ profile: PublicProfile }>(

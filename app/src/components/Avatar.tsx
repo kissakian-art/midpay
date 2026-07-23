@@ -1,5 +1,14 @@
 import React from "react";
-import { StyleSheet, Text, View, type ViewStyle } from "react-native";
+import {
+  Image,
+  StyleSheet,
+  Text,
+  View,
+  type ImageStyle,
+  type StyleProp,
+  type ViewStyle,
+} from "react-native";
+import { avatarUrl } from "../api";
 import { colors } from "../theme";
 
 /**
@@ -30,28 +39,34 @@ function colorFor(seed: string): string {
 export default function Avatar({
   handle,
   displayName,
+  userId,
+  avatarKey,
   size = 48,
   style,
 }: {
   handle?: string | null;
   displayName?: string | null;
+  /** Needed (with avatarKey) to render the real profile picture. */
+  userId?: string | null;
+  avatarKey?: string | null;
   size?: number;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
 }) {
   const seed = handle ?? displayName ?? "?";
+  const dims = { width: size, height: size, borderRadius: size / 2 };
+
+  // Real photo when the user has uploaded one; initials otherwise.
+  if (userId && avatarKey) {
+    return (
+      <Image
+        source={{ uri: avatarUrl(userId, avatarKey) }}
+        style={[s.root, dims, style as StyleProp<ImageStyle>]}
+      />
+    );
+  }
+
   return (
-    <View
-      style={[
-        s.root,
-        {
-          width: size,
-          height: size,
-          borderRadius: size / 2,
-          backgroundColor: colorFor(seed),
-        },
-        style,
-      ]}
-    >
+    <View style={[s.root, dims, { backgroundColor: colorFor(seed) }, style]}>
       <Text style={[s.text, { fontSize: size * 0.38 }]}>
         {initialsFor(displayName || handle)}
       </Text>
