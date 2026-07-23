@@ -104,8 +104,10 @@ Download tip: use the phone over mobile data, or disable Chrome QUIC
 
 ## 5. NOT done / pending
 
-- **Filters don't apply** (the big one — see §6). The engine is built & tested;
-  nothing renders them onto pixels, and there's no live preview.
+- **Filters — Stage 1 (photo baking) is code-complete, awaiting on-device
+  verification** (see §6). Colour filters now bake into captured photos via
+  offscreen Skia; live preview + privacy face-blur is still Stage 2. Needs a
+  **development** build + device test before it's confirmed working.
 - **Real credentials (need the user's accounts):**
   - **Flutterwave** — business verification in progress. When keys arrive:
     `wrangler secret put FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH`, and payments go
@@ -127,8 +129,43 @@ Download tip: use the phone over mobile data, or disable Chrome QUIC
 **Status:** the filter **engine is DONE and unit-tested** (19 node tests):
 `app/src/studio/` — `colorMatrix.ts` (composable 4×5 color-matrix algebra),
 `filters.ts` (all 20: 5 aesthetic + 3 privacy + 12 cinematic LUTs),
-`faceBlur.ts` (never-reveal fail-safe state machine). The carousel UI shows
-them. **What's missing is applying them to pixels + a live preview.**
+`faceBlur.ts` (never-reveal fail-safe state machine). The carousel UI shows them.
+
+**Stage 1 (photo colour-baking) — CODE-COMPLETE, needs a device test.** Done this
+session:
+- Installed the native stack **together** (the fix for the old solo-Skia crash):
+  `@shopify/react-native-skia@2.6.2`, `react-native-reanimated@4.5.0`,
+  `react-native-worklets@0.10.0` via `expo install` (SDK-57-correct versions).
+- Added `app/babel.config.js` with **only** `babel-preset-expo` — it
+  auto-configures the worklets plugin on SDK 57; adding the plugin manually
+  would double-apply and break it (verified against the v57 docs).
+- Rewrote `app/src/studio/skiaFilter.ts` from stub → real **offscreen** bake:
+  `Skia.Data.fromURI` → `MakeImageFromEncoded` → `Surface.MakeOffscreen` →
+  `drawImage` with `ColorFilter.MakeMatrix(filter.matrix)` → `makeImageSnapshot`
+  → `encodeToBytes(JPEG,92)` → written to `Paths.cache` via the new
+  `expo-file-system` `File` API → returns the new `file://` uri.
+  Colour filters bake; **Original + privacy filters pass through** (privacy face
+  detection is Stage 2). Skia is **lazy-required inside try/catch** so a missing
+  native module or any failure degrades to unfiltered passthrough — the Studio
+  screen can't be crashed by the filter path.
+- `tsc --noEmit` clean; `expo-doctor` clean except pre-existing patch/minor drift
+  on unrelated packages (expo/expo-constants/expo-image-picker/expo-video/
+  react-native-screens — not touched this session).
+
+**To verify Stage 1 (user, on device):** build a **development** client (NOT
+preview — a dev build red-screens instead of silently closing), install it, open
+Studio → Camera, pick a cinematic/aesthetic filter, take a **photo**, and confirm
+the review + published image is colour-graded. Video is still unfiltered until
+Stage 2.
+```
+cd /d D:\MidPay\app
+set "NODE_OPTIONS=--tls-max-v1.2"
+npx eas-cli build -p android --profile development
+```
+
+**What's still missing:** live filtered *preview* and *video* baking + the 3
+privacy face-blur filters — all **Stage 2** (VisionCamera + Skia frame processors
++ ML Kit face detector), unchanged from below.
 
 **Why it's hard / why it's not done yet:**
 - `expo-camera` (current camera) renders a **native preview JS can't touch** — it
