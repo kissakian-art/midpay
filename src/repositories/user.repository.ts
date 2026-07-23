@@ -13,6 +13,11 @@ export class UserRepository {
     return this.db.select().from(users).where(eq(users.phone, phone)).get();
   }
 
+  /** Handles are stored lowercased, so this is a case-insensitive lookup. */
+  findByHandle(handle: string): Promise<User | undefined> {
+    return this.db.select().from(users).where(eq(users.handle, handle.toLowerCase())).get();
+  }
+
   create(row: NewUser): Promise<User> {
     return this.db.insert(users).values(row).returning().get();
   }

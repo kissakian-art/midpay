@@ -2,21 +2,30 @@ import { Hono } from "hono";
 import { badRequest } from "../../services/errors";
 import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
-import { optionalString, readJson, requireParam } from "../util";
+import { optionalString, readJson, requireParam, requireString } from "../util";
 
 export const userRoutes = new Hono<AppEnv>();
 
 // --- Own profile editing. MUST be declared before "/:id" so the literal "me"
 // isn't captured by the param route. ---
 
-// Update display name / bio.
+// Update username / display name / bio.
 userRoutes.patch("/me", requireAuth, async (c) => {
   const body = await readJson(c);
   const user = await c.get("container").profile.update(c.get("userId"), {
     displayName: "displayName" in body ? optionalString(body, "displayName") ?? null : undefined,
     bio: "bio" in body ? optionalString(body, "bio") ?? null : undefined,
+    handle: "handle" in body ? requireString(body, "handle") : undefined,
   });
   return c.json({ user });
+});
+
+// Is a username free? Powers the live "available / taken" hint while typing.
+userRoutes.get("/handle-available", async (c) => {
+  const wanted = c.req.query("handle");
+  if (!wanted) throw badRequest("missing_handle", "handle query param is required");
+  const viewerId = await getOptionalUserId(c);
+  return c.json(await c.get("container").profile.checkHandle(wanted, viewerId ?? undefined));
 });
 
 // Upload/replace the profile picture (raw image bytes in the body).

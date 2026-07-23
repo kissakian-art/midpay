@@ -214,7 +214,17 @@ export const userContent = (userId: string) =>
 export const avatarUrl = (userId: string, version?: string | null) =>
   `${API_URL}/users/${userId}/avatar${version ? `?v=${encodeURIComponent(version.slice(-12))}` : ""}`;
 
-export const updateProfile = (input: { displayName?: string | null; bio?: string | null }) =>
+/** Live "is this @username free?" check for the profile editor. */
+export const checkHandle = (handle: string) =>
+  req<{ handle: string; available: boolean; reason?: string }>(
+    `/users/handle-available?handle=${encodeURIComponent(handle)}`,
+  );
+
+export const updateProfile = (input: {
+  displayName?: string | null;
+  bio?: string | null;
+  handle?: string;
+}) =>
   req<{ user: { id: string; displayName: string | null; bio: string | null; avatarR2Key: string | null } }>(
     "/users/me",
     { method: "PATCH", json: input },

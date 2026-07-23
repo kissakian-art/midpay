@@ -16,6 +16,7 @@ import {
   View,
 } from "react-native";
 import {
+  checkHandle,
   follow,
   profile as fetchProfile,
   unfollow,
@@ -56,6 +57,10 @@ export default function UserProfileScreen({ route, navigation }: any) {
   const [editing, setEditing] = useState(false);
   const [draftName, setDraftName] = useState("");
   const [draftBio, setDraftBio] = useState("");
+  const [draftHandle, setDraftHandle] = useState("");
+  const [handleState, setHandleState] = useState<
+    { status: "idle" | "checking" | "ok" | "bad"; reason?: string }
+  >({ status: "idle" });
   const [saving, setSaving] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -98,8 +103,32 @@ export default function UserProfileScreen({ route, navigation }: any) {
   const openEditor = () => {
     setDraftName(prof?.displayName ?? "");
     setDraftBio(prof?.bio ?? "");
+    setDraftHandle(prof?.handle ?? "");
+    setHandleState({ status: "idle" });
     setEditing(true);
   };
+
+  // Debounced username availability check while typing.
+  useEffect(() => {
+    if (!editing) return;
+    const wanted = draftHandle.trim().toLowerCase();
+    if (!wanted || wanted === prof?.handle) {
+      setHandleState({ status: "idle" });
+      return;
+    }
+    setHandleState({ status: "checking" });
+    const t = setTimeout(async () => {
+      try {
+        const r = await checkHandle(wanted);
+        setHandleState(
+          r.available ? { status: "ok" } : { status: "bad", reason: r.reason },
+        );
+      } catch {
+        setHandleState({ status: "idle" });
+      }
+    }, 450);
+    return () => clearTimeout(t);
+  }, [draftHandle, editing, prof?.handle]);
 
   const changePhoto = async () => {
     try {
@@ -127,9 +156,19 @@ export default function UserProfileScreen({ route, navigation }: any) {
   };
 
   const saveProfile = async () => {
+    const wantedHandle = draftHandle.trim().toLowerCase();
+    const handleChanged = !!wantedHandle && wantedHandle !== prof?.handle;
+    if (handleChanged && handleState.status === "bad") {
+      Alert.alert("Username unavailable", handleState.reason ?? "Pick another username");
+      return;
+    }
     try {
       setSaving("Saving…");
-      await updateProfile({ displayName: draftName.trim(), bio: draftBio.trim() });
+      await updateProfile({
+        displayName: draftName.trim(),
+        bio: draftBio.trim(),
+        ...(handleChanged ? { handle: wantedHandle } : {}),
+      });
       setEditing(false);
       await load();
     } catch (e) {
@@ -281,6 +320,35 @@ export default function UserProfileScreen({ route, navigation }: any) {
             <Text style={s.editAvatarLabel}>Tap to change photo</Text>
           </TouchableOpacity>
 
+          <Text style={s.label}>Username</Text>
+          <View style={s.handleRow}>
+            <Text style={s.handleAt}>@</Text>
+            <TextInput
+              style={s.handleInput}
+              value={draftHandle}
+              onChangeText={(t) => setDraftHandle(t.replace(/[^A-Za-z0-9._]/g, "").toLowerCase())}
+              placeholder="yourname"
+              placeholderTextColor={colors.dim}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={24}
+            />
+            {handleState.status === "checking" ? (
+              <ActivityIndicator size="small" color={colors.dim} />
+            ) : handleState.status === "ok" ? (
+              <Text style={s.handleOk}>✓</Text>
+            ) : handleState.status === "bad" ? (
+              <Text style={s.handleBad}>✕</Text>
+            ) : null}
+          </View>
+          <Text style={[s.hint, handleState.status === "bad" && s.hintBad]}>
+            {handleState.status === "bad"
+              ? handleState.reason
+              : handleState.status === "ok"
+                ? "Available"
+                : "Letters, numbers, . and _ — this is your unique @name"}
+          </Text>
+
           <Text style={s.label}>Display name</Text>
           <TextInput
             style={s.input}
@@ -423,6 +491,20 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   bioInput: { height: 96, textAlignVertical: "top" },
+  handleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.surface,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+  },
+  handleAt: { color: colors.dim, fontSize: 16, fontWeight: "700" },
+  handleInput: { flex: 1, color: colors.text, fontSize: 16, paddingVertical: 12, paddingLeft: 2 },
+  handleOk: { color: "#3BB273", fontSize: 18, fontWeight: "900" },
+  handleBad: { color: colors.danger, fontSize: 18, fontWeight: "900" },
+  hintBad: { color: colors.danger },
   hint: { color: colors.dim, fontSize: 11, textAlign: "right", marginTop: 4, marginBottom: 14 },
   editActions: { flexDirection: "row", gap: 12, marginTop: 10 },
   gridLikes: {
