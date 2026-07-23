@@ -74,6 +74,7 @@ export interface FeedItem {
   creatorDisplayName: string | null;
   creatorUserId: string;
   creatorAvatarR2Key?: string | null;
+  thumbnailR2Key?: string | null;
 }
 
 export interface CommentItem {
@@ -119,6 +120,19 @@ export const feed = (before?: number) =>
   req<{ feed: FeedItem[] }>(`/content/feed?limit=15${before ? `&before=${before}` : ""}`);
 
 export const mediaUrl = (contentId: string) => `${API_URL}/content/${contentId}/media`;
+
+/** Public cover image for a post (video first-frame / photo). `version` busts cache. */
+export const thumbnailUrl = (contentId: string, version?: string | null) =>
+  `${API_URL}/content/${contentId}/thumbnail${version ? `?v=${encodeURIComponent(version.slice(-12))}` : ""}`;
+
+export async function uploadThumbnail(contentId: string, fileUri: string) {
+  const blob = await (await fetch(fileUri)).blob();
+  await fetch(`${API_URL}/content/${contentId}/thumbnail`, {
+    method: "PUT",
+    headers: { ...authHeaders(), "content-type": "image/jpeg" },
+    body: blob,
+  }).catch(() => {}); // thumbnail is best-effort; never block publishing
+}
 
 export const like = (contentId: string) =>
   req(`/content/${contentId}/like`, { method: "POST" });

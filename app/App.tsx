@@ -4,12 +4,14 @@ import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { StatusBar } from "expo-status-bar";
 import React from "react";
 import { ActivityIndicator, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import ConversationScreen from "./src/screens/ConversationScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
 import LoginScreen from "./src/screens/LoginScreen";
+import PostViewerScreen from "./src/screens/PostViewerScreen";
 import StudioScreen from "./src/screens/StudioScreen";
 import UserProfileScreen from "./src/screens/UserProfileScreen";
 import { colors } from "./src/theme";
@@ -42,6 +44,9 @@ function createIcon() {
 }
 
 function Tabs() {
+  // Respect the device's bottom safe area (gesture pill / nav buttons) so the
+  // bar sits ABOVE the system navigation instead of colliding with it.
+  const insets = useSafeAreaInsets();
   return (
     <Tab.Navigator
       screenOptions={{
@@ -51,9 +56,9 @@ function Tabs() {
           backgroundColor: "#000",
           borderTopColor: "#222",
           borderTopWidth: 1,
-          height: 76,
+          height: 60 + insets.bottom,
           paddingTop: 8,
-          paddingBottom: 16,
+          paddingBottom: Math.max(insets.bottom, 10),
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "700", marginTop: 2 },
         tabBarActiveTintColor: "#fff",
@@ -94,6 +99,11 @@ function Root() {
               headerStyle: { backgroundColor: colors.bg },
               headerTintColor: colors.text,
             }}
+          />
+          <Stack.Screen
+            name="PostViewer"
+            component={PostViewerScreen}
+            options={{ headerShown: false }}
           />
           <Stack.Screen
             name="Conversation"

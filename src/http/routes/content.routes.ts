@@ -15,6 +15,18 @@ contentRoutes.get("/feed", async (c) => {
   return c.json({ feed: await c.get("container").content.feed(limit, before, viewerId) });
 });
 
+// Public — the post's cover thumbnail (video first-frame / photo). Always
+// public, even for paid content: the thumbnail is the sales cover, not the
+// paywalled media itself.
+contentRoutes.get("/:id/thumbnail", async (c) => {
+  const object = await c.get("container").content.openThumbnail(c.req.param("id"));
+  const headers = new Headers();
+  object.writeHttpMetadata(headers);
+  headers.set("content-length", String(object.size));
+  headers.set("cache-control", "public, max-age=300");
+  return new Response(object.body, { status: 200, headers });
+});
+
 // Public — fetch a single content item's metadata.
 contentRoutes.get("/:id", async (c) => {
   const item = await c.get("container").content.getForViewer(c.req.param("id"));

@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   FlatList,
+  Image,
   KeyboardAvoidingView,
   Modal,
   Platform,
@@ -18,6 +19,7 @@ import {
 import {
   checkHandle,
   follow,
+  thumbnailUrl,
   profile as fetchProfile,
   unfollow,
   updateProfile,
@@ -277,20 +279,35 @@ export default function UserProfileScreen({ route, navigation }: any) {
         }
         ListEmptyComponent={<Text style={s.empty}>No posts yet</Text>}
         renderItem={({ item }) => (
-          <View style={[s.gridCell, { width: cell, height: cell * 1.4 }]}>
-            <View style={s.gridInner}>
-              <Text style={s.gridKind}>
-                {item.kind === "text" ? "✍️" : item.kind === "photo" ? "🖼" : "🎬"}
-              </Text>
-              <Text style={s.gridTitle} numberOfLines={2}>
-                {item.kind === "text" ? item.description ?? item.title : item.title ?? "Untitled"}
-              </Text>
-            </View>
+          <TouchableOpacity
+            style={[s.gridCell, { width: cell, height: cell * 1.4 }]}
+            activeOpacity={0.85}
+            onPress={() => navigation.navigate("PostViewer", { item })}
+          >
+            {item.thumbnailR2Key ? (
+              <Image
+                source={{ uri: thumbnailUrl(item.id, item.thumbnailR2Key) }}
+                style={s.gridImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <View style={s.gridInner}>
+                <Text style={s.gridKind}>
+                  {item.kind === "text" ? "✍️" : item.kind === "photo" ? "🖼" : "🎬"}
+                </Text>
+                <Text style={s.gridTitle} numberOfLines={3}>
+                  {item.kind === "text"
+                    ? item.description ?? item.title
+                    : item.title ?? "Untitled"}
+                </Text>
+              </View>
+            )}
+            {item.kind === "video" ? <Text style={s.gridPlay}>▶</Text> : null}
             {item.pricing === "paid" ? (
               <Text style={s.gridPrice}>{ugx(item.priceUgx)}</Text>
             ) : null}
             <Text style={s.gridLikes}>♥ {compact(item.likeCount)}</Text>
-          </View>
+          </TouchableOpacity>
         )}
       />
 
@@ -441,6 +458,8 @@ const s = StyleSheet.create({
   tabActive: { color: colors.text, fontWeight: "700" },
   empty: { color: colors.dim, textAlign: "center", marginTop: 40 },
   gridCell: { padding: 1, backgroundColor: colors.bg },
+  gridImage: { flex: 1, backgroundColor: colors.surface },
+  gridPlay: { position: "absolute", top: 8, left: 8, color: "#fff", fontSize: 13, textShadowColor: "rgba(0,0,0,0.7)", textShadowOffset: {width:0,height:1}, textShadowRadius: 2 },
   gridInner: {
     flex: 1,
     backgroundColor: colors.surface,

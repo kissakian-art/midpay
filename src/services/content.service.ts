@@ -254,6 +254,15 @@ export class ContentService {
     return { object, content: item };
   }
 
+  /** Open a post's public cover thumbnail (no entitlement check — it's the cover). */
+  async openThumbnail(id: string): Promise<R2ObjectBody> {
+    const item = await this.content.findById(id);
+    if (!item || item.status === "deleted" || !item.thumbnailR2Key) throw notFound("thumbnail");
+    const object = await this.storage.get(item.thumbnailR2Key);
+    if (!object) throw notFound("thumbnail");
+    return object;
+  }
+
   private async authorizeMedia(item: Content, userId: string | null): Promise<void> {
     if (userId) {
       const creator = await this.creators.findById(item.creatorId);

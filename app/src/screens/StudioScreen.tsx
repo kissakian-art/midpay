@@ -19,7 +19,15 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ApiError, applyCreator, createContent, publishContent, uploadMedia } from "../api";
+import * as VideoThumbnails from "expo-video-thumbnails";
+import {
+  ApiError,
+  applyCreator,
+  createContent,
+  publishContent,
+  uploadMedia,
+  uploadThumbnail,
+} from "../api";
 import CapturePreview from "../components/CapturePreview";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
@@ -39,6 +47,16 @@ function mmss(total: number): string {
   const m = Math.floor(total / 60);
   const s = total % 60;
   return `${m}:${s.toString().padStart(2, "0")}`;
+}
+
+/** Grab a JPEG first-frame from a local video for the post cover. Best-effort. */
+async function makeVideoThumbnail(videoUri: string): Promise<string | null> {
+  try {
+    const { uri } = await VideoThumbnails.getThumbnailAsync(videoUri, { time: 300, quality: 0.7 });
+    return uri;
+  } catch {
+    return null;
+  }
 }
 
 export default function StudioScreen({ navigation }: { navigation: any }) {
@@ -185,6 +203,10 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         capture.uri,
         capture.kind === "photo" ? "image/jpeg" : "video/mp4",
       );
+      // Cover thumbnail: a photo is its own cover; a video gets its first frame.
+      const thumbUri =
+        capture.kind === "photo" ? capture.uri : await makeVideoThumbnail(capture.uri);
+      if (thumbUri) await uploadThumbnail(content.id, thumbUri);
       setBusy("Publishing…");
       await publishContent(content.id);
       setBusy(null);

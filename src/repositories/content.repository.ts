@@ -39,8 +39,9 @@ export class ContentRepository {
       .all();
   }
 
-  /** A user's published posts (profile grid), newest first. */
-  listPublishedByUserId(userId: string): Promise<Content[]> {
+  /** A user's published posts (profile grid), newest first. Full feed shape so
+   *  the same card/viewer components work (creator identity included). */
+  listPublishedByUserId(userId: string): Promise<FeedItem[]> {
     return this.db
       .select({
         id: content.id,
@@ -62,9 +63,14 @@ export class ContentRepository {
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,
         deletedAt: content.deletedAt,
+        creatorHandle: users.handle,
+        creatorDisplayName: users.displayName,
+        creatorUserId: users.id,
+        creatorAvatarR2Key: users.avatarR2Key,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))
+      .innerJoin(users, eq(users.id, creators.userId))
       .where(and(eq(creators.userId, userId), eq(content.status, "published")))
       .orderBy(desc(content.publishedAt))
       .all();
