@@ -187,8 +187,27 @@ export const markRead = (conversationId: string) =>
   req(`/conversations/${conversationId}/read`, { method: "POST" });
 
 // --- Profiles ---
+export interface PublicProfile {
+  id: string;
+  handle: string;
+  displayName: string | null;
+  avatarR2Key?: string | null;
+  bio?: string | null;
+  followers: number;
+  following: number;
+  /** Older backends omit these — treat as 0/false. */
+  likes?: number;
+  posts?: number;
+  isFollowing?: boolean;
+  isSelf?: boolean;
+}
+
+/** A user's published posts, for the profile grid. */
+export const userContent = (userId: string) =>
+  req<{ content: FeedItem[] }>(`/users/${userId}/content`);
+
 export const profile = (userId: string) =>
-  req<{ profile: { id: string; handle: string; displayName: string | null; followers: number; following: number } }>(
+  req<{ profile: PublicProfile }>(
     `/users/${userId}`,
   );
 export const follow = (userId: string) => req(`/users/${userId}/follow`, { method: "POST" });

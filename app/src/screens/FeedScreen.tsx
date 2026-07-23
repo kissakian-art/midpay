@@ -111,6 +111,9 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
                 title: `@${it.creatorHandle}`,
               })
             }
+            onOpenProfile={(it) =>
+              navigation.navigate("UserProfile", { userId: it.creatorUserId })
+            }
           />
         )}
         pagingEnabled

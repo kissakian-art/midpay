@@ -1,14 +1,22 @@
 import { Hono } from "hono";
-import { requireAuth } from "../middleware/auth";
+import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
 import { requireParam } from "../util";
 
 export const userRoutes = new Hono<AppEnv>();
 
-// Public profile with follower/following counts.
+// Public profile. An optional bearer token adds isFollowing / isSelf so the
+// client can render the right Follow button state immediately.
 userRoutes.get("/:id", async (c) => {
-  const profile = await c.get("container").social.profile(c.req.param("id"));
+  const viewerId = await getOptionalUserId(c);
+  const profile = await c.get("container").social.profile(c.req.param("id"), viewerId);
   return c.json({ profile });
+});
+
+// A user's published posts (profile grid).
+userRoutes.get("/:id/content", async (c) => {
+  const content = await c.get("container").social.listUserContent(c.req.param("id"));
+  return c.json({ content });
 });
 
 userRoutes.get("/:id/followers", async (c) => {

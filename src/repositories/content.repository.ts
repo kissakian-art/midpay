@@ -38,6 +38,37 @@ export class ContentRepository {
       .all();
   }
 
+  /** A user's published posts (profile grid), newest first. */
+  listPublishedByUserId(userId: string): Promise<Content[]> {
+    return this.db
+      .select({
+        id: content.id,
+        creatorId: content.creatorId,
+        kind: content.kind,
+        title: content.title,
+        description: content.description,
+        r2Key: content.r2Key,
+        thumbnailR2Key: content.thumbnailR2Key,
+        durationSeconds: content.durationSeconds,
+        sizeBytes: content.sizeBytes,
+        pricing: content.pricing,
+        priceUgx: content.priceUgx,
+        status: content.status,
+        likeCount: content.likeCount,
+        commentCount: content.commentCount,
+        purchaseCount: content.purchaseCount,
+        publishedAt: content.publishedAt,
+        createdAt: content.createdAt,
+        updatedAt: content.updatedAt,
+        deletedAt: content.deletedAt,
+      })
+      .from(content)
+      .innerJoin(creators, eq(creators.id, content.creatorId))
+      .where(and(eq(creators.userId, userId), eq(content.status, "published")))
+      .orderBy(desc(content.publishedAt))
+      .all();
+  }
+
   update(id: string, patch: Partial<Content>): Promise<Content> {
     return this.db.update(content).set(patch).where(eq(content.id, id)).returning().get();
   }

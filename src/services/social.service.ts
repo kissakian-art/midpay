@@ -13,6 +13,13 @@ export interface PublicProfile {
   bio: string | null;
   followers: number;
   following: number;
+  /** Total likes across all their published posts. */
+  likes: number;
+  posts: number;
+  /** Whether the signed-in viewer follows this user (false when anonymous). */
+  isFollowing: boolean;
+  /** True when the viewer is looking at their own profile. */
+  isSelf: boolean;
 }
 
 /**
@@ -51,10 +58,16 @@ export class SocialService {
     return this.social.listFollowing(userId);
   }
 
-  async profile(userId: string): Promise<PublicProfile> {
+  async profile(userId: string, viewerId?: string | null): Promise<PublicProfile> {
     const user = await this.users.findById(userId);
     if (!user || user.status === "deleted") throw notFound("user");
-    const counts = await this.social.followCounts(userId);
+    const [counts, stats, following] = await Promise.all([
+      this.social.followCounts(userId),
+      this.social.contentStats(userId),
+      viewerId && viewerId !== userId
+        ? this.social.followExists(viewerId, userId)
+        : Promise.resolve(undefined),
+    ]);
     return {
       id: user.id,
       handle: user.handle,
@@ -63,7 +76,16 @@ export class SocialService {
       bio: user.bio,
       followers: counts.followers,
       following: counts.following,
+      likes: stats.likes,
+      posts: stats.posts,
+      isFollowing: !!following,
+      isSelf: viewerId === userId,
     };
+  }
+
+  /** A user's published posts, for the profile grid. */
+  listUserContent(userId: string) {
+    return this.content.listPublishedByUserId(userId);
   }
 
   // --- Likes ---

@@ -10,8 +10,8 @@ import ConversationScreen from "./src/screens/ConversationScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
 import LoginScreen from "./src/screens/LoginScreen";
-import ProfileScreen from "./src/screens/ProfileScreen";
 import StudioScreen from "./src/screens/StudioScreen";
+import UserProfileScreen from "./src/screens/UserProfileScreen";
 import { colors } from "./src/theme";
 
 const Tab = createBottomTabNavigator();
@@ -19,7 +19,25 @@ const Stack = createNativeStackNavigator();
 
 function tabIcon(label: string) {
   return ({ focused }: { focused: boolean }) => (
-    <Text style={{ fontSize: 22, opacity: focused ? 1 : 0.45 }}>{label}</Text>
+    <Text style={{ fontSize: 26, opacity: focused ? 1 : 0.5 }}>{label}</Text>
+  );
+}
+
+/** The centre "create" button, raised and boxed like TikTok's. */
+function createIcon() {
+  return () => (
+    <View
+      style={{
+        width: 46,
+        height: 32,
+        borderRadius: 9,
+        backgroundColor: colors.accent,
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <Text style={{ fontSize: 22, fontWeight: "900", color: "#000", lineHeight: 25 }}>+</Text>
+    </View>
   );
 }
 
@@ -28,15 +46,28 @@ function Tabs() {
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarStyle: { backgroundColor: colors.bg, borderTopColor: colors.border },
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.dim,
+        // Taller bar with real contrast — the slim default was hard to read.
+        tabBarStyle: {
+          backgroundColor: "#000",
+          borderTopColor: "#222",
+          borderTopWidth: 1,
+          height: 76,
+          paddingTop: 8,
+          paddingBottom: 16,
+        },
+        tabBarLabelStyle: { fontSize: 11, fontWeight: "700", marginTop: 2 },
+        tabBarActiveTintColor: "#fff",
+        tabBarInactiveTintColor: "#8A8A8A",
       }}
     >
-      <Tab.Screen name="FeedTab" component={FeedScreen} options={{ title: "Feed", tabBarIcon: tabIcon("🎬") }} />
-      <Tab.Screen name="UploadTab" component={StudioScreen} options={{ title: "Create", tabBarIcon: tabIcon("➕") }} />
+      <Tab.Screen name="FeedTab" component={FeedScreen} options={{ title: "Home", tabBarIcon: tabIcon("🏠") }} />
+      <Tab.Screen
+        name="UploadTab"
+        component={StudioScreen}
+        options={{ title: "", tabBarIcon: createIcon() }}
+      />
       <Tab.Screen name="InboxTab" component={InboxScreen} options={{ title: "Inbox", tabBarIcon: tabIcon("💬") }} />
-      <Tab.Screen name="ProfileTab" component={ProfileScreen} options={{ title: "Me", tabBarIcon: tabIcon("👤") }} />
+      <Tab.Screen name="ProfileTab" component={UserProfileScreen} options={{ title: "Profile", tabBarIcon: tabIcon("👤") }} />
     </Tab.Navigator>
   );
 }
@@ -55,6 +86,15 @@ function Root() {
       {user ? (
         <>
           <Stack.Screen name="Main" component={Tabs} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="UserProfile"
+            component={UserProfileScreen}
+            options={{
+              title: "",
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+            }}
+          />
           <Stack.Screen
             name="Conversation"
             component={ConversationScreen}

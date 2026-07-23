@@ -1,6 +1,6 @@
 import { and, desc, eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { comments, follows, likes, users, type Comment } from "../db/schema";
+import { comments, content, creators, follows, likes, users, type Comment } from "../db/schema";
 
 /** Public author/user summary embedded in social listings. */
 export interface UserSummary {
@@ -75,6 +75,23 @@ export class SocialRepository {
       .where(eq(follows.followerId, userId))
       .get();
     return { followers: followers?.n ?? 0, following: following?.n ?? 0 };
+  }
+
+  /**
+   * Aggregate post stats for a user's profile header (§ TikTok-style: posts +
+   * total likes across everything they've published).
+   */
+  async contentStats(userId: string): Promise<{ posts: number; likes: number }> {
+    const row = await this.db
+      .select({
+        posts: sql<number>`count(*)`,
+        likes: sql<number>`coalesce(sum(${content.likeCount}), 0)`,
+      })
+      .from(content)
+      .innerJoin(creators, eq(creators.id, content.creatorId))
+      .where(and(eq(creators.userId, userId), eq(content.status, "published")))
+      .get();
+    return { posts: row?.posts ?? 0, likes: row?.likes ?? 0 };
   }
 
   // --- Likes ---

@@ -10,8 +10,21 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ApiError, authHeaders, checkout, devSettle, like, mediaUrl, unlike, type FeedItem } from "../api";
+import {
+  ApiError,
+  authHeaders,
+  checkout,
+  devSettle,
+  follow,
+  like,
+  mediaUrl,
+  unfollow,
+  unlike,
+  type FeedItem,
+} from "../api";
+import { useAuth } from "../auth";
 import { colors, ugx } from "../theme";
+import Avatar from "./Avatar";
 
 interface Props {
   item: FeedItem;
@@ -19,16 +32,27 @@ interface Props {
   height: number;
   onOpenComments: (item: FeedItem) => void;
   onMessageCreator: (item: FeedItem) => void;
+  onOpenProfile: (item: FeedItem) => void;
 }
 
 /**
  * One full-screen feed cell: video (free = plays immediately; paid = locked
  * behind a buy overlay), with the right-rail actions (like/comment/DM).
  */
-export default function FeedItemView({ item, active, height, onOpenComments, onMessageCreator }: Props) {
+export default function FeedItemView({
+  item,
+  active,
+  height,
+  onOpenComments,
+  onMessageCreator,
+  onOpenProfile,
+}: Props) {
+  const { user } = useAuth();
+  const isSelf = user?.id === item.creatorUserId;
   const [unlocked, setUnlocked] = useState(item.pricing === "free" || item.owned);
   const [buying, setBuying] = useState(false);
   const [liked, setLiked] = useState(false);
+  const [following, setFollowing] = useState(false);
   const [likeCount, setLikeCount] = useState(item.likeCount);
 
   const player = useVideoPlayer(null, (p) => {
@@ -84,6 +108,17 @@ export default function FeedItemView({ item, active, height, onOpenComments, onM
     }
   };
 
+  const toggleFollow = async () => {
+    const next = !following;
+    setFollowing(next); // optimistic
+    try {
+      if (next) await follow(item.creatorUserId);
+      else await unfollow(item.creatorUserId);
+    } catch {
+      setFollowing(!next); // revert
+    }
+  };
+
   const toggleLike = async () => {
     try {
       if (liked) {
@@ -136,6 +171,22 @@ export default function FeedItemView({ item, active, height, onOpenComments, onM
 
       {/* Right rail: actions */}
       <View style={s.rail}>
+        {/* Creator avatar with the TikTok-style follow shortcut */}
+        <View style={s.avatarWrap}>
+          <TouchableOpacity onPress={() => onOpenProfile(item)} activeOpacity={0.8}>
+            <Avatar handle={item.creatorHandle} displayName={item.creatorDisplayName} size={48} />
+          </TouchableOpacity>
+          {!isSelf ? (
+            <TouchableOpacity
+              style={[s.followBadge, following && s.followBadgeDone]}
+              onPress={toggleFollow}
+              activeOpacity={0.8}
+            >
+              <Text style={s.followBadgeText}>{following ? "✓" : "+"}</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
+
         <TouchableOpacity style={s.action} onPress={toggleLike}>
           <Text style={[s.actionIcon, liked && { color: colors.danger }]}>
             {liked ? "♥" : "♡"}
@@ -188,12 +239,43 @@ const s = StyleSheet.create({
   },
   buyText: { color: "#000", fontWeight: "800", fontSize: 15 },
   lockNote: { color: colors.dim, marginTop: 10, fontSize: 12 },
-  meta: { position: "absolute", left: 14, bottom: 28, right: 90 },
+  // Offsets clear the taller (68px) tab bar so nothing hides behind it.
+  meta: { position: "absolute", left: 14, bottom: 90, right: 90 },
   handle: { color: colors.text, fontWeight: "800", fontSize: 16 },
   title: { color: colors.text, marginTop: 4 },
   ownedBadge: { color: colors.success, marginTop: 6, fontWeight: "700", fontSize: 12 },
-  rail: { position: "absolute", right: 10, bottom: 40, alignItems: "center", gap: 18 },
+  rail: { position: "absolute", right: 10, bottom: 100, alignItems: "center", gap: 18 },
   action: { alignItems: "center" },
-  actionIcon: { fontSize: 30, color: colors.text },
-  actionLabel: { color: colors.text, fontSize: 12, marginTop: 2 },
+  actionIcon: {
+    fontSize: 32,
+    color: "#fff",
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  actionLabel: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    marginTop: 2,
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  // Avatar + follow shortcut (TikTok-style: "+" badge overlapping the avatar).
+  avatarWrap: { alignItems: "center", marginBottom: 6 },
+  followBadge: {
+    position: "absolute",
+    bottom: -9,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: colors.danger,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: colors.bg,
+  },
+  followBadgeDone: { backgroundColor: colors.accent },
+  followBadgeText: { color: "#fff", fontSize: 13, fontWeight: "900", lineHeight: 15 },
 });
