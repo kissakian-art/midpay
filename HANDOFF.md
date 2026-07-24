@@ -213,6 +213,27 @@ coexist, needed when we revisit). tsc + `expo export` clean after the revert.
 video + privacy face-blur) becomes worth the integration. Until then, Stage 1 is
 the shipping baseline.
 
+### Follow-up (2026-07-24): user prioritised VIDEO — verified NO on-device path
+
+User said video is the primary content and asked to pursue filtered video. I
+researched every on-device path and confirmed all are blocked on RN 0.86:
+- **VisionCamera v4** (latest 4.7.3, the only line that records filtered Skia
+  output) is triple-blocked: (1) needs `react-native-worklets-core`, which
+  collides with reanimated 4's `react-native-worklets` (Android `WorkletsPackage`
+  duplicate-class build failure); (2) 4.7.3 predates RN 0.86 / new arch → won't
+  compile; (3) open Skia color-matrix filter-switch crash (#3606 — our exact case).
+- **VisionCamera v5** does live preview but still cannot record filtered output.
+
+**Conclusion:** the only reliable way to deliver filtered *video* is **server-side
+filtering** — phone shows live filtered preview via v5 `SkiaCamera` while a video
+output records the RAW clip (v5 supports both at once); upload raw + filterId;
+server applies the colour matrix with ffmpeg. This also offloads GPU work from
+low-end Ugandan phones. Cost: needs an ffmpeg transcode service (Cloudflare
+Workers can't run ffmpeg) → breaks the current $0/month infra, so it's a
+deliberate business decision, not a rush job. Recommended stance: keep Stage 1
+shipping; build the server-side pipeline when ready, OR adopt v5 filtered
+recording once it lands. Do NOT spend an EAS build on the v4 path — verified dead.
+
 **Why it's hard / why it's not done yet:**
 - `expo-camera` (current camera) renders a **native preview JS can't touch** — it
   physically cannot do live filters. This is architectural, not a small fix.
