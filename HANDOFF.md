@@ -136,9 +136,13 @@ session:
 - Installed the native stack **together** (the fix for the old solo-Skia crash):
   `@shopify/react-native-skia@2.6.2`, `react-native-reanimated@4.5.0`,
   `react-native-worklets@0.10.0` via `expo install` (SDK-57-correct versions).
-- Added `app/babel.config.js` with **only** `babel-preset-expo` — it
-  auto-configures the worklets plugin on SDK 57; adding the plugin manually
-  would double-apply and break it (verified against the v57 docs).
+- **No `babel.config.js`** — this project is zero-config and Expo's default
+  transform already applies `babel-preset-expo`, which auto-configures the
+  worklets plugin on SDK 57. (A project-root babel.config.js naming
+  `babel-preset-expo` actually **breaks the build**: the preset is nested under
+  `expo/` and isn't resolvable from the project root, so the Metro transformer
+  fails to construct — `Cannot read properties of undefined (reading
+  'transformFile')`. Don't add one.)
 - Rewrote `app/src/studio/skiaFilter.ts` from stub → real **offscreen** bake:
   `Skia.Data.fromURI` → `MakeImageFromEncoded` → `Surface.MakeOffscreen` →
   `drawImage` with `ColorFilter.MakeMatrix(filter.matrix)` → `makeImageSnapshot`
