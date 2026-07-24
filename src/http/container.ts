@@ -3,6 +3,7 @@ import type { Env } from "../env";
 import { AdminRepository } from "../repositories/admin.repository";
 import { AnalyticsRepository } from "../repositories/analytics.repository";
 import { AuditRepository } from "../repositories/audit.repository";
+import { BackgroundRepository } from "../repositories/background.repository";
 import { ConfigRepository } from "../repositories/config.repository";
 import { ContentRepository } from "../repositories/content.repository";
 import { CreatorRepository } from "../repositories/creator.repository";
@@ -24,6 +25,7 @@ import { ConfigAdminService } from "../services/admin/config-admin.service";
 import { CreatorAdminService } from "../services/admin/creator-admin.service";
 import { ModerationService } from "../services/admin/moderation.service";
 import { AuthService } from "../services/auth.service";
+import { BackgroundService } from "../services/background.service";
 import { ConfigService } from "../services/config.service";
 import { ContentService } from "../services/content.service";
 import { LiveService } from "../services/live.service";
@@ -61,6 +63,7 @@ export interface Container {
   messaging: MessagingService;
   music: MusicService;
   search: SearchService;
+  backgrounds: BackgroundService;
 }
 
 export function createContainer(env: Env): Container {
@@ -84,6 +87,7 @@ export function createContainer(env: Env): Container {
   const messagingRepo = new MessagingRepository(db);
   const musicRepo = new MusicRepository(db);
   const searchRepo = new SearchRepository(db);
+  const backgroundRepo = new BackgroundRepository(db);
 
   const config = new ConfigService(db, env);
   const flw = new FlutterwaveClient(env);
@@ -114,6 +118,7 @@ export function createContainer(env: Env): Container {
   const messaging = new MessagingService(messagingRepo, users);
   const music = new MusicService(musicRepo, storage);
   const search = new SearchService(searchRepo);
+  const backgrounds = new BackgroundService(backgroundRepo, users, storage);
 
   return {
     db,
@@ -134,5 +139,6 @@ export function createContainer(env: Env): Container {
     profile,
     music,
     search,
+    backgrounds,
   };
 }

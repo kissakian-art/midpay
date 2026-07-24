@@ -25,6 +25,9 @@ export const users = sqliteTable(
       .notNull()
       .default("active"),
     phoneVerifiedAt: integer("phone_verified_at", { mode: "timestamp" }),
+    // Owner/admin of this app account (in-app admin screens: catalog music +
+    // text backgrounds). Separate from the admin_users console system.
+    isAdmin: integer("is_admin", { mode: "boolean" }).notNull().default(false),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),

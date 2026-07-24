@@ -51,14 +51,23 @@ musicRoutes.get("/tracks/:id/audio", async (c) => {
 // Everything below requires auth.
 musicRoutes.use("/*", requireAuth);
 
-// Create a track (metadata). Audio bytes are uploaded separately.
+// Create a track (metadata). Audio bytes are uploaded separately. Admins may
+// mark a track as `catalog` (the official, curated library); everyone else gets
+// a `device` track (still public/reusable).
 musicRoutes.post("/tracks", async (c) => {
   const body = await readJson(c);
-  const track = await c.get("container").music.createTrack(c.get("userId"), {
-    title: requireString(body, "title"),
-    artist: optionalString(body, "artist"),
-    durationSeconds: optionalInt(body, "durationSeconds"),
-  });
+  const userId = c.get("userId");
+  const user = await c.get("container").users.findById(userId);
+  const track = await c.get("container").music.createTrack(
+    userId,
+    {
+      title: requireString(body, "title"),
+      artist: optionalString(body, "artist"),
+      durationSeconds: optionalInt(body, "durationSeconds"),
+      source: optionalString(body, "source") === "catalog" ? "catalog" : undefined,
+    },
+    !!user?.isAdmin,
+  );
   return c.json({ track }, 201);
 });
 

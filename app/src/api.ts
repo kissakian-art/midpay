@@ -56,6 +56,7 @@ export interface User {
   phone: string;
   handle: string;
   displayName: string | null;
+  isAdmin?: boolean;
 }
 
 /**
@@ -84,6 +85,7 @@ export interface Track {
 /** Visual style for a text post (gradient/solid background + styled caption). */
 export interface TextStyle {
   bg: string[];
+  bgImage?: string | null;
   color: string;
   font: string | null;
   align: "left" | "center" | "right";
@@ -228,8 +230,24 @@ export const musicAudioUrl = (trackId: string) => `${API_URL}/music/tracks/${tra
 export const listTracks = (q?: string) =>
   req<{ tracks: Track[] }>(`/music/tracks${q ? `?q=${encodeURIComponent(q)}` : ""}`);
 
-export const createTrack = (input: { title: string; artist?: string; durationSeconds?: number }) =>
-  req<{ track: Track }>("/music/tracks", { method: "POST", json: input });
+export const createTrack = (input: {
+  title: string;
+  artist?: string;
+  durationSeconds?: number;
+  source?: "catalog";
+}) => req<{ track: Track }>("/music/tracks", { method: "POST", json: input });
+
+// --- Text backgrounds (admin-uploaded catalog) ---
+export const backgroundImageUrl = (id: string) => `${API_URL}/backgrounds/${id}/image`;
+export const listBackgrounds = () => req<{ backgrounds: { id: string }[] }>("/backgrounds");
+export const createBackground = () => req<{ background: { id: string } }>("/backgrounds", { method: "POST" });
+export const deleteBackground = (id: string) => req(`/backgrounds/${id}`, { method: "DELETE" });
+export async function uploadBackgroundImage(id: string, fileUri: string, contentType = "image/jpeg") {
+  const res = await putFile(`${API_URL}/backgrounds/${id}/image`, fileUri, contentType);
+  if (res.status < 200 || res.status >= 300) {
+    throw new ApiError(res.status, "upload_failed", "Background upload failed");
+  }
+}
 
 export async function uploadTrackAudio(
   trackId: string,

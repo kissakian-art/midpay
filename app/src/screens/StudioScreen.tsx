@@ -23,11 +23,14 @@ import * as VideoThumbnails from "expo-video-thumbnails";
 import {
   ApiError,
   applyCreator,
+  backgroundImageUrl,
   createContent,
+  listBackgrounds,
   publishContent,
   uploadMedia,
   uploadThumbnail,
 } from "../api";
+import { Image as RNImage } from "react-native";
 import OverlayEditor from "../components/OverlayEditor";
 import MusicPicker from "../components/MusicPicker";
 import MusicTrimmer from "../components/MusicTrimmer";
@@ -93,7 +96,14 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [musicOpen, setMusicOpen] = useState(false);
   const [textBody, setTextBody] = useState("");
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE);
+  const [bgCatalog, setBgCatalog] = useState<string[]>([]);
   const [paid, setPaid] = useState(false);
+
+  // Admin-uploaded image backgrounds available to all creators.
+  useEffect(() => {
+    if (createMode !== "text") return;
+    listBackgrounds().then((r) => setBgCatalog(r.backgrounds.map((b) => b.id))).catch(() => {});
+  }, [createMode]);
   const priceUgx = 5000;
 
   const groupFilters = useMemo(
@@ -334,7 +344,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         {/* WYSIWYG canvas — type right on the chosen background. */}
-        <TextBackground bg={textStyle.bg} style={s.composeCanvas}>
+        <TextBackground bg={textStyle.bg} bgImage={textStyle.bgImage} style={s.composeCanvas}>
           <TextInput
             style={[
               s.composeInput,
@@ -364,10 +374,18 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           keyboardShouldPersistTaps="handled"
         >
           {TEXT_BACKGROUNDS.map((bg, i) => (
-            <TouchableOpacity key={`bg${i}`} onPress={() => setTextStyle((t) => ({ ...t, bg }))}>
+            <TouchableOpacity key={`bg${i}`} onPress={() => setTextStyle((t) => ({ ...t, bg, bgImage: null }))}>
               <TextBackground
                 bg={bg}
-                style={[s.bgSwatch, textStyle.bg.join() === bg.join() && s.swatchOn]}
+                style={[s.bgSwatch, !textStyle.bgImage && textStyle.bg.join() === bg.join() && s.swatchOn]}
+              />
+            </TouchableOpacity>
+          ))}
+          {bgCatalog.map((id) => (
+            <TouchableOpacity key={`img${id}`} onPress={() => setTextStyle((t) => ({ ...t, bgImage: id }))}>
+              <RNImage
+                source={{ uri: backgroundImageUrl(id) }}
+                style={[s.bgSwatch, textStyle.bgImage === id && s.swatchOn]}
               />
             </TouchableOpacity>
           ))}

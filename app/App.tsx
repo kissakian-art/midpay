@@ -7,6 +7,7 @@ import { ActivityIndicator, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
+import AdminScreen from "./src/screens/AdminScreen";
 import ConversationScreen from "./src/screens/ConversationScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
@@ -111,6 +112,15 @@ function Root() {
             component={SearchScreen}
             options={{
               title: "Search",
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+            }}
+          />
+          <Stack.Screen
+            name="Admin"
+            component={AdminScreen}
+            options={{
+              title: "Admin",
               headerStyle: { backgroundColor: colors.bg },
               headerTintColor: colors.text,
             }}

@@ -290,7 +290,11 @@ export default function FeedItemView({
   return (
     <View style={[s.cell, { height }]}>
       {item.kind === "text" && unlocked ? (
-        <TextBackground bg={(item.textStyle?.bg ?? ["#111111"])} style={s.textPost}>
+        <TextBackground
+          bg={item.textStyle?.bg ?? ["#111111"]}
+          bgImage={item.textStyle?.bgImage}
+          style={s.textPost}
+        >
           <Text
             style={[
               s.textPostBody,

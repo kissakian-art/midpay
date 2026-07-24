@@ -191,6 +191,7 @@ function readTextStyle(body: Record<string, unknown>): import("../../db/schema")
   const align = obj.align === "left" || obj.align === "right" ? obj.align : "center";
   return {
     bg: bg.length ? bg : ["#111111"],
+    bgImage: typeof obj.bgImage === "string" ? obj.bgImage.slice(0, 64) : null,
     color: hex(obj.color, "#ffffff"),
     font: typeof obj.font === "string" ? obj.font.slice(0, 40) : null,
     align,

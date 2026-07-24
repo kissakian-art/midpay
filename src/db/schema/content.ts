@@ -23,6 +23,7 @@ export interface TextOverlay {
  */
 export interface TextStyle {
   bg: string[]; // 1 colour = solid, 2+ = gradient stops (hex)
+  bgImage?: string | null; // an admin-catalog background id (image), overrides bg
   color: string; // text colour (hex)
   font: string | null; // fontFamily (e.g. Android 'serif'), null = default
   align: "left" | "center" | "right";

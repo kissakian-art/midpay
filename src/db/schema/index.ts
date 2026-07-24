@@ -7,6 +7,7 @@ export * from "./auth";
 export * from "./creators";
 export * from "./content";
 export * from "./music";
+export * from "./backgrounds";
 export * from "./social";
 export * from "./live";
 export * from "./ledger";

@@ -34,6 +34,11 @@ export class StorageService {
     return `music/${trackId}/audio/${crypto.randomUUID()}`;
   }
 
+  /** Text-post background image key, namespaced per background. */
+  backgroundKey(backgroundId: string): string {
+    return `backgrounds/${backgroundId}/image/${crypto.randomUUID()}`;
+  }
+
   async put(
     key: string,
     body: ReadableStream | ArrayBuffer,

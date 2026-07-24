@@ -219,6 +219,13 @@ export default function UserProfileScreen({ route, navigation }: any) {
                 Edit profile
               </Text>
             </TouchableOpacity>
+            {user?.isAdmin ? (
+              <TouchableOpacity style={s.iconBtn} onPress={() => navigation.navigate("Admin")}>
+                <Text style={s.iconBtnText} numberOfLines={1}>
+                  Admin
+                </Text>
+              </TouchableOpacity>
+            ) : null}
             <TouchableOpacity style={s.iconBtn} onPress={logout}>
               <Text style={s.iconBtnText} numberOfLines={1}>
                 Log out
