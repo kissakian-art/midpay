@@ -81,12 +81,22 @@ export interface Track {
   durationSeconds: number | null;
 }
 
+/** Visual style for a text post (gradient/solid background + styled caption). */
+export interface TextStyle {
+  bg: string[];
+  color: string;
+  font: string | null;
+  align: "left" | "center" | "right";
+  bold?: boolean;
+}
+
 export interface FeedItem {
   id: string;
   kind: "video" | "photo" | "text";
   title: string | null;
   description: string | null;
   overlays?: TextOverlay[] | null;
+  textStyle?: TextStyle | null;
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
@@ -199,6 +209,7 @@ export const createContent = (input: {
   priceUgx?: number;
   durationSeconds?: number;
   overlays?: TextOverlay[];
+  textStyle?: TextStyle;
   musicTrackId?: string;
   musicStartMs?: number;
   musicEndMs?: number;

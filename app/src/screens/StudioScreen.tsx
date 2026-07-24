@@ -31,10 +31,18 @@ import {
 import OverlayEditor from "../components/OverlayEditor";
 import MusicPicker from "../components/MusicPicker";
 import MusicTrimmer from "../components/MusicTrimmer";
+import TextBackground from "../components/TextBackground";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
 import { bakeFilterIntoPhoto } from "../studio/skiaFilter";
-import { type TextOverlay, type Track } from "../api";
+import {
+  DEFAULT_TEXT_STYLE,
+  isLight,
+  TEXT_BACKGROUNDS,
+  TEXT_COLORS,
+  TEXT_FONTS,
+} from "../studio/textStyles";
+import { type TextOverlay, type TextStyle, type Track } from "../api";
 
 const MAX_SECONDS = 300; // §4.3 five-minute clip cap
 
@@ -84,6 +92,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [musicEnd, setMusicEnd] = useState<number | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [textBody, setTextBody] = useState("");
+  const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE);
   const [paid, setPaid] = useState(false);
   const priceUgx = 5000;
 
@@ -275,11 +284,13 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         description: body,
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx } : {}),
+        textStyle,
         ...musicParams(),
       });
       await publishContent(content.id);
       setBusy(null);
       setTextBody("");
+      setTextStyle(DEFAULT_TEXT_STYLE);
       selectMusic(null);
       setCreateMode("camera");
       Alert.alert("Posted!", "Your text post is live on the feed.");
@@ -322,20 +333,82 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         style={s.root}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <View style={s.textHeader}>
-          <Text style={s.textTitle}>Write a post</Text>
-        </View>
-        <TextInput
-          style={s.textInput}
-          placeholder="What do you want to share?"
-          placeholderTextColor={colors.dim}
-          multiline
-          value={textBody}
-          onChangeText={setTextBody}
-          maxLength={1000}
-          autoFocus
-        />
-        <Text style={s.counter}>{textBody.length}/1000</Text>
+        {/* WYSIWYG canvas — type right on the chosen background. */}
+        <TextBackground bg={textStyle.bg} style={s.composeCanvas}>
+          <TextInput
+            style={[
+              s.composeInput,
+              {
+                color: textStyle.color,
+                textAlign: textStyle.align,
+                fontFamily: textStyle.font ?? undefined,
+                fontWeight: textStyle.bold ? "800" : "600",
+              },
+            ]}
+            placeholder="What do you want to share?"
+            placeholderTextColor={isLight(textStyle.color) ? "rgba(0,0,0,0.45)" : "rgba(255,255,255,0.6)"}
+            multiline
+            value={textBody}
+            onChangeText={setTextBody}
+            maxLength={1000}
+            autoFocus
+          />
+          <Text style={[s.composeCounter, { color: textStyle.color }]}>{textBody.length}/1000</Text>
+        </TextBackground>
+
+        {/* Single compact style strip: backgrounds · fonts · colours · align · bold. */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={s.styleStrip}
+          keyboardShouldPersistTaps="handled"
+        >
+          {TEXT_BACKGROUNDS.map((bg, i) => (
+            <TouchableOpacity key={`bg${i}`} onPress={() => setTextStyle((t) => ({ ...t, bg }))}>
+              <TextBackground
+                bg={bg}
+                style={[s.bgSwatch, textStyle.bg.join() === bg.join() && s.swatchOn]}
+              />
+            </TouchableOpacity>
+          ))}
+          <View style={s.stripDivider} />
+          {TEXT_FONTS.map((f) => (
+            <TouchableOpacity
+              key={f.label}
+              style={[s.fontChip, textStyle.font === f.font && s.fontChipOn]}
+              onPress={() => setTextStyle((t) => ({ ...t, font: f.font }))}
+            >
+              <Text style={[s.fontChipText, { fontFamily: f.font ?? undefined }]}>{f.label}</Text>
+            </TouchableOpacity>
+          ))}
+          <View style={s.stripDivider} />
+          {TEXT_COLORS.map((c) => (
+            <TouchableOpacity
+              key={c}
+              style={[s.colorSwatch, { backgroundColor: c }, textStyle.color === c && s.swatchOn]}
+              onPress={() => setTextStyle((t) => ({ ...t, color: c }))}
+            />
+          ))}
+          <TouchableOpacity
+            style={s.styleToggle}
+            onPress={() =>
+              setTextStyle((t) => ({
+                ...t,
+                align: t.align === "left" ? "center" : t.align === "center" ? "right" : "left",
+              }))
+            }
+          >
+            <Text style={s.styleToggleText}>
+              {textStyle.align === "left" ? "L" : textStyle.align === "right" ? "R" : "C"}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[s.styleToggle, textStyle.bold && s.styleToggleOn]}
+            onPress={() => setTextStyle((t) => ({ ...t, bold: !t.bold }))}
+          >
+            <Text style={[s.styleToggleText, { fontWeight: "900" }]}>B</Text>
+          </TouchableOpacity>
+        </ScrollView>
 
         <View style={s.composerPad}>
           <TouchableOpacity style={s.musicBtn} onPress={() => setMusicOpen(true)}>
@@ -711,16 +784,51 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   secondaryBtnText: { color: colors.text, fontWeight: "700" },
-  textHeader: { paddingTop: 60, paddingHorizontal: 20 },
-  textTitle: { color: colors.text, fontSize: 24, fontWeight: "800" },
-  textInput: {
+  // --- Styled text composer ---
+  composeCanvas: {
     flex: 1,
-    color: colors.text,
-    fontSize: 18,
-    padding: 20,
-    textAlignVertical: "top",
+    minHeight: 150,
+    margin: 14,
+    borderRadius: 18,
+    overflow: "hidden",
+    justifyContent: "center",
   },
-  counter: { color: colors.dim, fontSize: 12, textAlign: "right", paddingHorizontal: 20 },
+  composeInput: {
+    flex: 1,
+    fontSize: 26,
+    lineHeight: 34,
+    paddingHorizontal: 24,
+    paddingVertical: 28,
+    textAlignVertical: "center",
+  },
+  composeCounter: { position: "absolute", bottom: 10, right: 14, fontSize: 12, opacity: 0.75 },
+  styleStrip: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 14, paddingVertical: 6 },
+  stripDivider: { width: 1, height: 26, backgroundColor: colors.border, marginHorizontal: 4 },
+  bgSwatch: { width: 34, height: 34, borderRadius: 17, borderWidth: 2, borderColor: "transparent" },
+  colorSwatch: { width: 28, height: 28, borderRadius: 14, borderWidth: 2, borderColor: "rgba(255,255,255,0.3)" },
+  swatchOn: { borderColor: colors.accent },
+  fontChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 14,
+    backgroundColor: colors.card,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  fontChipOn: { borderColor: colors.accent },
+  fontChipText: { color: colors.text, fontWeight: "700", fontSize: 13 },
+  styleToggle: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: colors.card,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  styleToggleOn: { borderColor: colors.accent },
+  styleToggleText: { color: colors.text, fontWeight: "800", fontSize: 14 },
   composerPad: { paddingHorizontal: 20 },
   // The shared primaryBtn is flex:1 for the side-by-side review row; as a
   // standalone in the composer it must NOT grow to fill the column.

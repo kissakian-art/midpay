@@ -152,6 +152,26 @@ function readOverlays(body: Record<string, unknown>): import("../../db/schema").
     .filter((o) => o.text.trim().length > 0);
 }
 
+/** Parse + sanitize a text post's visual style (untrusted input). */
+function readTextStyle(body: Record<string, unknown>): import("../../db/schema").TextStyle | undefined {
+  const raw = body["textStyle"];
+  if (raw === undefined) return undefined;
+  if (raw === null) return undefined;
+  if (typeof raw !== "object") throw badRequest("bad_text_style", "textStyle must be an object");
+  const obj = raw as Record<string, unknown>;
+  const hex = (v: unknown, d: string): string => (typeof v === "string" && HEX.test(v) ? v : d);
+  const bgIn = Array.isArray(obj.bg) ? obj.bg : [];
+  const bg = bgIn.slice(0, 3).map((c) => hex(c, "#000000"));
+  const align = obj.align === "left" || obj.align === "right" ? obj.align : "center";
+  return {
+    bg: bg.length ? bg : ["#111111"],
+    color: hex(obj.color, "#ffffff"),
+    font: typeof obj.font === "string" ? obj.font.slice(0, 40) : null,
+    align,
+    bold: obj.bold === true,
+  };
+}
+
 // Create content metadata (media itself is uploaded to R2 separately).
 contentRoutes.post("/", async (c) => {
   const body = await readJson(c);
@@ -170,6 +190,7 @@ contentRoutes.post("/", async (c) => {
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
     overlays: readOverlays(body),
+    textStyle: readTextStyle(body),
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
     musicEndMs: optionalInt(body, "musicEndMs"),
@@ -186,6 +207,7 @@ contentRoutes.patch("/:id", async (c) => {
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
     overlays: readOverlays(body),
+    textStyle: readTextStyle(body),
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
     musicEndMs: optionalInt(body, "musicEndMs"),

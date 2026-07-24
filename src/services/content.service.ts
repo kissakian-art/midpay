@@ -1,4 +1,4 @@
-import type { Content, TextOverlay } from "../db/schema";
+import type { Content, TextOverlay, TextStyle } from "../db/schema";
 import { ContentRepository } from "../repositories/content.repository";
 import { CreatorRepository } from "../repositories/creator.repository";
 import { EntitlementRepository } from "../repositories/entitlement.repository";
@@ -18,6 +18,7 @@ export interface CreateContentInput {
   pricing?: "free" | "paid";
   priceUgx?: number;
   overlays?: TextOverlay[] | null;
+  textStyle?: TextStyle | null;
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
@@ -29,6 +30,7 @@ export interface UpdateContentInput {
   pricing?: "free" | "paid";
   priceUgx?: number;
   overlays?: TextOverlay[] | null;
+  textStyle?: TextStyle | null;
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
@@ -99,6 +101,7 @@ export class ContentService {
       pricing,
       priceUgx,
       overlays: input.overlays ?? null,
+      textStyle: input.textStyle ?? null,
       musicTrackId: input.musicTrackId ?? null,
       musicStartMs: input.musicStartMs ?? null,
       musicEndMs: input.musicEndMs ?? null,
@@ -133,6 +136,7 @@ export class ContentService {
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
     if (input.overlays !== undefined) patch.overlays = input.overlays;
+    if (input.textStyle !== undefined) patch.textStyle = input.textStyle;
     if (input.musicTrackId !== undefined) patch.musicTrackId = input.musicTrackId;
     if (input.musicStartMs !== undefined) patch.musicStartMs = input.musicStartMs;
     if (input.musicEndMs !== undefined) patch.musicEndMs = input.musicEndMs;

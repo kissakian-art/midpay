@@ -17,6 +17,19 @@ export interface TextOverlay {
 }
 
 /**
+ * Visual style for a TEXT post — a coloured/gradient background with a styled
+ * caption (Instagram/Facebook-style). Self-contained (concrete values, not
+ * preset ids) so old posts keep looking right even if the app's presets change.
+ */
+export interface TextStyle {
+  bg: string[]; // 1 colour = solid, 2+ = gradient stops (hex)
+  color: string; // text colour (hex)
+  font: string | null; // fontFamily (e.g. Android 'serif'), null = default
+  align: "left" | "center" | "right";
+  bold?: boolean;
+}
+
+/**
  * content — metadata for a recorded video or photo (§4.5). The media bytes live
  * in R2 (§2.2), NEVER in D1; only the R2 object key is stored here.
  *
@@ -40,6 +53,9 @@ export const content = sqliteTable(
 
     // Creator text overlays (§ compose-at-playback). JSON array; NULL when none.
     overlays: text("overlays", { mode: "json" }).$type<TextOverlay[]>(),
+
+    // Visual style for a text post (background + font/colour). NULL = plain.
+    textStyle: text("text_style", { mode: "json" }).$type<TextStyle>(),
 
     // Optional background music (§ compose-at-playback): a reference to a track
     // (see music.ts) played over the media, from `musicStartMs` into the track.

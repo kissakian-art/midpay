@@ -31,6 +31,7 @@ import {
 import { useAuth } from "../auth";
 import { colors, ugx } from "../theme";
 import Avatar from "./Avatar";
+import TextBackground from "./TextBackground";
 import TextOverlayLayer from "./TextOverlayLayer";
 
 interface Props {
@@ -289,9 +290,21 @@ export default function FeedItemView({
   return (
     <View style={[s.cell, { height }]}>
       {item.kind === "text" && unlocked ? (
-        <View style={s.textPost}>
-          <Text style={s.textPostBody}>{item.description ?? item.title}</Text>
-        </View>
+        <TextBackground bg={(item.textStyle?.bg ?? ["#111111"])} style={s.textPost}>
+          <Text
+            style={[
+              s.textPostBody,
+              {
+                color: item.textStyle?.color ?? "#fff",
+                textAlign: item.textStyle?.align ?? "center",
+                fontFamily: item.textStyle?.font ?? undefined,
+                fontWeight: item.textStyle?.bold ? "800" : "600",
+              },
+            ]}
+          >
+            {item.description ?? item.title}
+          </Text>
+        </TextBackground>
       ) : unlocked && item.kind === "photo" ? (
         <Image
           source={{ uri: mediaUrl(item.id), headers: authHeaders() }}
@@ -414,9 +427,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
     paddingHorizontal: 28,
     paddingBottom: 90,
-    backgroundColor: "#111",
   },
-  textPostBody: { color: "#fff", fontSize: 22, lineHeight: 31, fontWeight: "600", textAlign: "center" },
+  textPostBody: { fontSize: 26, lineHeight: 36 },
   locked: {
     flex: 1,
     alignItems: "center",

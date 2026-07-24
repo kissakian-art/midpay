@@ -1,0 +1,1 @@
+ALTER TABLE `content` ADD `text_style` text;
