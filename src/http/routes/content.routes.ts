@@ -72,9 +72,13 @@ contentRoutes.get("/:id/media", async (c) => {
   return new Response(object.body, { status: 200, headers });
 });
 
-// Public — list comments on a content item (§ social).
+// Public — list comments on a content item (§ social). A bearer token (optional)
+// decorates each comment with `likedByMe`.
 contentRoutes.get("/:id/comments", async (c) => {
-  return c.json({ comments: await c.get("container").social.listComments(c.req.param("id")) });
+  const viewerId = await getOptionalUserId(c);
+  return c.json({
+    comments: await c.get("container").social.listComments(c.req.param("id"), viewerId),
+  });
 });
 
 // Everything below requires auth (creator + social actions).
@@ -104,6 +108,22 @@ contentRoutes.delete("/:id/comments/:commentId", async (c) => {
     await c
       .get("container")
       .social.deleteComment(c.get("userId"), c.req.param("id"), c.req.param("commentId")),
+  );
+});
+
+// React to a comment.
+contentRoutes.post("/:id/comments/:commentId/like", async (c) => {
+  return c.json(
+    await c
+      .get("container")
+      .social.likeComment(c.get("userId"), c.req.param("id"), c.req.param("commentId")),
+  );
+});
+contentRoutes.delete("/:id/comments/:commentId/like", async (c) => {
+  return c.json(
+    await c
+      .get("container")
+      .social.unlikeComment(c.get("userId"), c.req.param("id"), c.req.param("commentId")),
   );
 });
 

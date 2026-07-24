@@ -120,7 +120,9 @@ export interface CommentItem {
   body: string;
   parentId: string | null;
   createdAt: string;
-  author: { id: string; handle: string; displayName: string | null };
+  likeCount: number;
+  likedByMe: boolean;
+  author: { id: string; handle: string; displayName: string | null; avatarR2Key?: string | null };
 }
 
 export interface ConversationSummary {
@@ -197,6 +199,10 @@ export const addComment = (contentId: string, body: string, parentId?: string) =
     method: "POST",
     json: { body, ...(parentId ? { parentId } : {}) },
   });
+export const likeComment = (contentId: string, commentId: string) =>
+  req(`/content/${contentId}/comments/${commentId}/like`, { method: "POST" });
+export const unlikeComment = (contentId: string, commentId: string) =>
+  req(`/content/${contentId}/comments/${commentId}/like`, { method: "DELETE" });
 
 // --- Creator / upload ---
 export const applyCreator = () => req("/creators/apply", { method: "POST" });

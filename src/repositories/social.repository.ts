@@ -1,6 +1,15 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { comments, content, creators, follows, likes, users, type Comment } from "../db/schema";
+import {
+  commentLikes,
+  comments,
+  content,
+  creators,
+  follows,
+  likes,
+  users,
+  type Comment,
+} from "../db/schema";
 
 /** Public author/user summary embedded in social listings. */
 export interface UserSummary {
@@ -136,6 +145,7 @@ export class SocialRepository {
         userId: comments.userId,
         parentId: comments.parentId,
         body: comments.body,
+        likeCount: comments.likeCount,
         createdAt: comments.createdAt,
         updatedAt: comments.updatedAt,
         deletedAt: comments.deletedAt,
@@ -154,5 +164,41 @@ export class SocialRepository {
       .set({ deletedAt: now, body: "[deleted]" })
       .where(eq(comments.id, id))
       .run();
+  }
+
+  // --- Comment reactions ---
+  commentLikeExists(userId: string, commentId: string): Promise<{ id: string } | undefined> {
+    return this.db
+      .select({ id: commentLikes.id })
+      .from(commentLikes)
+      .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)))
+      .get();
+  }
+
+  createCommentLike(userId: string, commentId: string): Promise<unknown> {
+    return this.db.insert(commentLikes).values({ userId, commentId }).run();
+  }
+
+  deleteCommentLike(userId: string, commentId: string): Promise<unknown> {
+    return this.db
+      .delete(commentLikes)
+      .where(and(eq(commentLikes.userId, userId), eq(commentLikes.commentId, commentId)))
+      .run();
+  }
+
+  bumpCommentLikeCount(commentId: string, delta: 1 | -1): Promise<unknown> {
+    const next = delta === 1 ? sql`${comments.likeCount} + 1` : sql`max(0, ${comments.likeCount} - 1)`;
+    return this.db.update(comments).set({ likeCount: next }).where(eq(comments.id, commentId)).run();
+  }
+
+  /** Which of the given comment ids the viewer has liked. */
+  async listLikedCommentIds(userId: string, commentIds: string[]): Promise<Set<string>> {
+    if (commentIds.length === 0) return new Set();
+    const rows = await this.db
+      .select({ commentId: commentLikes.commentId })
+      .from(commentLikes)
+      .where(and(eq(commentLikes.userId, userId), inArray(commentLikes.commentId, commentIds)))
+      .all();
+    return new Set(rows.map((r) => r.commentId));
   }
 }

@@ -32,11 +32,27 @@ export const comments = sqliteTable(
     userId: uuidRef("user_id").notNull(),
     parentId: uuidRef("parent_id"), // NULL = top-level
     body: text("body").notNull(),
+    likeCount: integer("like_count").notNull().default(0),
     createdAt: createdAt(),
     updatedAt: updatedAt(),
     deletedAt: deletedAt(),
   },
   (t) => [index("comments_content_idx").on(t.contentId)],
+);
+
+/** comment_likes — a user reacts to (likes) a comment. */
+export const commentLikes = sqliteTable(
+  "comment_likes",
+  {
+    id: uuidPk(),
+    userId: uuidRef("user_id").notNull(),
+    commentId: uuidRef("comment_id").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    uniqueIndex("comment_likes_pair_uq").on(t.userId, t.commentId),
+    index("comment_likes_comment_idx").on(t.commentId),
+  ],
 );
 
 /**
@@ -72,5 +88,6 @@ export const messages = sqliteTable(
 
 export type Like = typeof likes.$inferSelect;
 export type Comment = typeof comments.$inferSelect;
+export type CommentLike = typeof commentLikes.$inferSelect;
 export type Conversation = typeof conversations.$inferSelect;
 export type Message = typeof messages.$inferSelect;

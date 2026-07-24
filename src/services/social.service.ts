@@ -130,8 +130,32 @@ export class SocialService {
     return comment;
   }
 
-  listComments(contentId: string) {
-    return this.social.listComments(contentId);
+  async listComments(contentId: string, viewerId?: string | null) {
+    const rows = await this.social.listComments(contentId);
+    if (!viewerId) return rows.map((c) => ({ ...c, likedByMe: false }));
+    const liked = await this.social.listLikedCommentIds(
+      viewerId,
+      rows.map((c) => c.id),
+    );
+    return rows.map((c) => ({ ...c, likedByMe: liked.has(c.id) }));
+  }
+
+  async likeComment(userId: string, contentId: string, commentId: string): Promise<{ liked: true }> {
+    const comment = await this.social.findComment(commentId);
+    if (!comment || comment.contentId !== contentId || comment.deletedAt) throw notFound("comment");
+    if (!(await this.social.commentLikeExists(userId, commentId))) {
+      await this.social.createCommentLike(userId, commentId);
+      await this.social.bumpCommentLikeCount(commentId, 1);
+    }
+    return { liked: true };
+  }
+
+  async unlikeComment(userId: string, _contentId: string, commentId: string): Promise<{ liked: false }> {
+    if (await this.social.commentLikeExists(userId, commentId)) {
+      await this.social.deleteCommentLike(userId, commentId);
+      await this.social.bumpCommentLikeCount(commentId, -1);
+    }
+    return { liked: false };
   }
 
   async deleteComment(userId: string, contentId: string, commentId: string): Promise<{ deleted: true }> {
