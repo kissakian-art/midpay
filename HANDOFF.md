@@ -104,10 +104,10 @@ Download tip: use the phone over mobile data, or disable Chrome QUIC
 
 ## 5. NOT done / pending
 
-- **Filters — Stage 1 (photo baking) is code-complete, awaiting on-device
-  verification** (see §6). Colour filters now bake into captured photos via
-  offscreen Skia; live preview + privacy face-blur is still Stage 2. Needs a
-  **development** build + device test before it's confirmed working.
+- **Filters — Stage 1 (photo baking) VERIFIED on device (2026-07-24).** Colour
+  filters bake into captured photos via offscreen Skia (Noir → true grayscale,
+  Vivid Pop → punchier, confirmed on a real Android dev build). **Stage 2 (live
+  WYSIWYG preview + video) is now the active requirement** — see §6.
 - **Real credentials (need the user's accounts):**
   - **Flutterwave** — business verification in progress. When keys arrive:
     `wrangler secret put FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH`, and payments go
@@ -170,6 +170,14 @@ npx eas-cli build -p android --profile development
 **What's still missing:** live filtered *preview* and *video* baking + the 3
 privacy face-blur filters — all **Stage 2** (VisionCamera + Skia frame processors
 + ML Kit face detector), unchanged from below.
+
+**PRODUCT REQUIREMENT confirmed by the user (2026-07-24):** the camera must be
+**WYSIWYG** — the filter shows *live while framing/recording*, not applied as a
+post-capture surprise at the review screen. "Bake after capture" (Stage 1) is
+only acceptable for gallery uploads. This makes Stage 2 (live preview) required,
+not optional, for the camera path. The Stage-1 native stack
+(Skia+reanimated+worklets) is proven to coexist on-device, so the main new risk
+in Stage 2 is adding react-native-vision-camera itself.
 
 **Why it's hard / why it's not done yet:**
 - `expo-camera` (current camera) renders a **native preview JS can't touch** — it
