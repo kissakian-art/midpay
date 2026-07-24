@@ -28,10 +28,11 @@ import {
   uploadMedia,
   uploadThumbnail,
 } from "../api";
-import CapturePreview from "../components/CapturePreview";
+import OverlayEditor from "../components/OverlayEditor";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
 import { bakeFilterIntoPhoto } from "../studio/skiaFilter";
+import { type TextOverlay } from "../api";
 
 const MAX_SECONDS = 300; // §4.3 five-minute clip cap
 
@@ -75,6 +76,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [busy, setBusy] = useState<string | null>(null);
 
   const [capture, setCapture] = useState<Capture | null>(null);
+  const [overlays, setOverlays] = useState<TextOverlay[]>([]);
   const [textBody, setTextBody] = useState("");
   const [paid, setPaid] = useState(false);
   const priceUgx = 5000;
@@ -109,6 +111,16 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
     );
   }
 
+  // Open a fresh review with no leftover overlays from a previous take.
+  const openCapture = (c: Capture) => {
+    setOverlays([]);
+    setCapture(c);
+  };
+  const closeReview = () => {
+    setCapture(null);
+    setOverlays([]);
+  };
+
   const takePhoto = async () => {
     if (!ready) {
       Alert.alert("Camera not ready", "Give it a moment and try again.");
@@ -119,7 +131,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       const shot = await cameraRef.current?.takePictureAsync({ quality: 0.9 });
       if (!shot?.uri) throw new Error("Camera returned no image");
       const baked = await bakeFilterIntoPhoto(shot.uri, filter);
-      setCapture({ uri: baked.uri, kind: "photo", filtered: baked.filtered });
+      openCapture({ uri: baked.uri, kind: "photo", filtered: baked.filtered });
     } catch (e) {
       Alert.alert("Couldn't take photo", e instanceof Error ? e.message : "Try again");
     } finally {
@@ -144,7 +156,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
     setRecording(true);
     try {
       const rec = await cameraRef.current?.recordAsync({ maxDuration: MAX_SECONDS });
-      if (rec?.uri) setCapture({ uri: rec.uri, kind: "video", filtered: false });
+      if (rec?.uri) openCapture({ uri: rec.uri, kind: "video", filtered: false });
       else Alert.alert("Recording failed", "No video was produced. Try again.");
     } catch (e) {
       Alert.alert("Recording failed", e instanceof Error ? e.message : "Try again");
@@ -166,7 +178,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       });
       if (!r.canceled && r.assets[0]) {
         const a = r.assets[0];
-        setCapture({
+        openCapture({
           uri: a.uri,
           kind: a.type === "image" ? "photo" : "video",
           filtered: false,
@@ -196,6 +208,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         title: filter.id === "none" ? "New post" : `${filter.name} post`,
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx } : {}),
+        ...(overlays.length ? { overlays } : {}),
       });
       setBusy("Uploading…");
       await uploadMedia(
@@ -210,7 +223,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       setBusy("Publishing…");
       await publishContent(content.id);
       setBusy(null);
-      setCapture(null);
+      closeReview();
       Alert.alert("Published!", "Your post is live on the feed.");
       navigation.navigate("FeedTab");
     } catch (e) {
@@ -395,33 +408,36 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         </View>
       ) : null}
 
-      {/* Review + post */}
-      <Modal visible={!!capture} animationType="slide" onRequestClose={() => setCapture(null)}>
-        <View style={s.review}>
-          {capture ? <CapturePreview uri={capture.uri} kind={capture.kind} /> : null}
-
-          {capture && !capture.filtered && filter.id !== "none" ? (
-            <Text style={s.reviewWarn}>
-              “{filter.name}” selected — filter baking is coming in an update; posting works now.
-            </Text>
+      {/* Review + post — full-bleed editor (add/drag text) above the post bar. */}
+      <Modal visible={!!capture} animationType="slide" onRequestClose={closeReview}>
+        <View style={s.reviewRoot}>
+          {capture ? (
+            <OverlayEditor
+              uri={capture.uri}
+              kind={capture.kind}
+              overlays={overlays}
+              onChange={setOverlays}
+            />
           ) : null}
 
-          <View style={s.priceRow}>
-            <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
-              <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={[s.toggle, paid && s.toggleActive]} onPress={() => setPaid(true)}>
-              <Text style={[s.toggleText, paid && s.toggleTextActive]}>Paid · 5,000 UGX</Text>
-            </TouchableOpacity>
-          </View>
+          <View style={s.reviewBar}>
+            <View style={s.priceRow}>
+              <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
+                <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[s.toggle, paid && s.toggleActive]} onPress={() => setPaid(true)}>
+                <Text style={[s.toggleText, paid && s.toggleTextActive]}>Paid · 5,000 UGX</Text>
+              </TouchableOpacity>
+            </View>
 
-          <View style={s.reviewActions}>
-            <TouchableOpacity style={s.secondaryBtn} onPress={() => setCapture(null)} disabled={!!busy}>
-              <Text style={s.secondaryBtnText}>Discard</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={s.primaryBtn} onPress={postMedia} disabled={!!busy}>
-              {busy ? <ActivityIndicator color="#000" /> : <Text style={s.primaryBtnText}>Post</Text>}
-            </TouchableOpacity>
+            <View style={s.reviewActions}>
+              <TouchableOpacity style={s.secondaryBtn} onPress={closeReview} disabled={!!busy}>
+                <Text style={s.secondaryBtnText}>Discard</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={s.primaryBtn} onPress={postMedia} disabled={!!busy}>
+                {busy ? <ActivityIndicator color="#000" /> : <Text style={s.primaryBtnText}>Post</Text>}
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </Modal>
@@ -557,8 +573,8 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   busyText: { color: colors.text, marginTop: 12 },
-  review: { flex: 1, backgroundColor: colors.bg, paddingTop: 50, paddingHorizontal: 20 },
-  reviewWarn: { color: colors.dim, fontSize: 12, textAlign: "center", marginTop: 10 },
+  reviewRoot: { flex: 1, backgroundColor: "#000" },
+  reviewBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, backgroundColor: colors.bg },
   priceRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   toggle: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   toggleActive: { backgroundColor: colors.accent, borderColor: colors.accent },

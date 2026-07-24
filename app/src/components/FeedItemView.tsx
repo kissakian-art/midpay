@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import {
@@ -25,6 +26,7 @@ import {
 import { useAuth } from "../auth";
 import { colors, ugx } from "../theme";
 import Avatar from "./Avatar";
+import TextOverlayLayer from "./TextOverlayLayer";
 
 interface Props {
   item: FeedItem;
@@ -48,6 +50,7 @@ export default function FeedItemView({
   onOpenProfile,
 }: Props) {
   const { user } = useAuth();
+  const { width } = useWindowDimensions();
   const isSelf = user?.id === item.creatorUserId;
   const [unlocked, setUnlocked] = useState(item.pricing === "free" || item.owned);
   const [buying, setBuying] = useState(false);
@@ -159,6 +162,11 @@ export default function FeedItemView({
           <Text style={s.lockNote}>Pay with Mobile Money</Text>
         </View>
       )}
+
+      {/* Creator text overlays — only over real media the viewer can see. */}
+      {unlocked && item.kind !== "text" ? (
+        <TextOverlayLayer overlays={item.overlays} width={width} height={height} />
+      ) : null}
 
       {/* Bottom-left: creator + title */}
       <View style={s.meta}>

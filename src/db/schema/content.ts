@@ -2,6 +2,21 @@ import { integer, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqli
 import { createdAt, deletedAt, ugx, updatedAt, uuidPk, uuidRef } from "./_shared";
 
 /**
+ * A creator-authored text overlay rendered OVER the media in MidPay's own player
+ * (composed at playback — never baked into the media bytes, so no re-encode).
+ * Coordinates are normalized to the displayed media rectangle (0..1) so they map
+ * across devices/screen sizes; `x`,`y` are the overlay box's TOP-LEFT.
+ */
+export interface TextOverlay {
+  text: string;
+  x: number; // 0..1, top-left X as a fraction of media width
+  y: number; // 0..1, top-left Y as a fraction of media height
+  size: number; // font size as a fraction of media width (e.g. 0.06)
+  color: string; // hex text colour
+  bg: string | null; // shape background colour (hex, may carry alpha) or null = none
+}
+
+/**
  * content — metadata for a recorded video or photo (§4.5). The media bytes live
  * in R2 (§2.2), NEVER in D1; only the R2 object key is stored here.
  *
@@ -22,6 +37,9 @@ export const content = sqliteTable(
       .default("video"),
     title: text("title"),
     description: text("description"),
+
+    // Creator text overlays (§ compose-at-playback). JSON array; NULL when none.
+    overlays: text("overlays", { mode: "json" }).$type<TextOverlay[]>(),
 
     // Media pointers — R2 only (§2.2).
     r2Key: text("r2_key"), // encoded media object

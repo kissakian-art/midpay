@@ -124,6 +124,33 @@ Download tip: use the phone over mobile data, or disable Chrome QUIC
 - **Polish backlog:** feed poster image for locked paid videos; real thumbnails
   for photo posts in feed; pull-to-refresh niceties.
 
+### Text overlays — SHIPPED 2026-07-24 (needs device test)
+
+TikTok-style text-on-media, composed **at playback** (never baked into the file —
+sidesteps the video-encoder wall that blocked filtered video).
+- **Backend (deployed):** nullable `overlays` JSON column on `content`
+  (`text({mode:"json"}).$type<TextOverlay[]>()`); threaded through create/update +
+  route `readOverlays()` which **sanitises** untrusted input (≤12 items, text
+  ≤200 chars, coords/size clamped, colours hex-only). Migration
+  `0002_complete_vengeance.sql` applied to remote D1; worker redeployed. Verified
+  end-to-end via API round-trip (clamping confirmed).
+- **App:** `components/OverlayEditor.tsx` (full-bleed COVER preview + draggable
+  text boxes via PanResponder + bottom bar: text / 6 colours / Shape pill toggle /
+  S·M·L size / delete). `components/TextOverlayLayer.tsx` renders them read-only
+  over media in `FeedItemView` (covers PostViewer). Coords normalized (0..1,
+  top-left) so editor/feed match. tsc + `expo export` clean.
+- **NEEDS ON-DEVICE TEST:** drag + render can't be verified remotely. Build a dev
+  or preview APK, add text to a photo/video, position it, post, confirm it shows
+  in the feed in the same spot. **Also flag:** editor uses a COVER preview to
+  match the feed; on very different aspect ratios positions may drift slightly.
+
+### Music on media — designed, NOT built (next)
+
+3 sources confirmed by owner: device audio / admin royalty-free catalog /
+reusable creator "original sound". Compose-at-playback (expo-video + expo-audio),
+same pattern as overlays. See [[music-feature-design]] memory. Service providers
+(Flutterwave/SMS) are on hold per owner (2026-07-24).
+
 ---
 
 ## 6. NEXT MILESTONE — Filters (the plan)

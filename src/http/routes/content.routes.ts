@@ -114,6 +114,44 @@ function readPricing(body: Record<string, unknown>): "free" | "paid" | undefined
   return v;
 }
 
+const HEX = /^#([0-9a-fA-F]{3,8})$/;
+
+/**
+ * Parse + SANITIZE creator text overlays. Untrusted client input, so everything
+ * is clamped: count/text length capped, coords/size clamped to sane ranges, and
+ * colours restricted to hex. Returns undefined when the field is absent (leave
+ * as-is on update); an empty/invalid array becomes [] (clears overlays).
+ */
+function readOverlays(body: Record<string, unknown>): import("../../db/schema").TextOverlay[] | undefined {
+  const raw = body["overlays"];
+  if (raw === undefined) return undefined;
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) throw badRequest("bad_overlays", "overlays must be an array");
+
+  const num = (v: unknown, lo: number, hi: number, d: number): number => {
+    const n = Number(v);
+    return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : d;
+  };
+  const hex = (v: unknown, d: string | null): string | null =>
+    typeof v === "string" && HEX.test(v) ? v : d;
+
+  return raw
+    .slice(0, 12)
+    .map((o) => {
+      const obj = (o ?? {}) as Record<string, unknown>;
+      const text = typeof obj.text === "string" ? obj.text.slice(0, 200) : "";
+      return {
+        text,
+        x: num(obj.x, 0, 1, 0.05),
+        y: num(obj.y, 0, 1, 0.05),
+        size: num(obj.size, 0.02, 0.25, 0.06),
+        color: hex(obj.color, "#ffffff") ?? "#ffffff",
+        bg: obj.bg === null || obj.bg === undefined ? null : hex(obj.bg, null),
+      };
+    })
+    .filter((o) => o.text.trim().length > 0);
+}
+
 // Create content metadata (media itself is uploaded to R2 separately).
 contentRoutes.post("/", async (c) => {
   const body = await readJson(c);
@@ -131,6 +169,7 @@ contentRoutes.post("/", async (c) => {
     sizeBytes: optionalInt(body, "sizeBytes"),
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
+    overlays: readOverlays(body),
   });
   return c.json({ content: item }, 201);
 });
@@ -143,6 +182,7 @@ contentRoutes.patch("/:id", async (c) => {
     description: optionalString(body, "description"),
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
+    overlays: readOverlays(body),
   });
   return c.json({ content: item });
 });

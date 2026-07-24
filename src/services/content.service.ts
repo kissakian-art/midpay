@@ -1,4 +1,4 @@
-import type { Content } from "../db/schema";
+import type { Content, TextOverlay } from "../db/schema";
 import { ContentRepository } from "../repositories/content.repository";
 import { CreatorRepository } from "../repositories/creator.repository";
 import { EntitlementRepository } from "../repositories/entitlement.repository";
@@ -17,6 +17,7 @@ export interface CreateContentInput {
   sizeBytes?: number;
   pricing?: "free" | "paid";
   priceUgx?: number;
+  overlays?: TextOverlay[] | null;
 }
 
 export interface UpdateContentInput {
@@ -24,6 +25,7 @@ export interface UpdateContentInput {
   description?: string;
   pricing?: "free" | "paid";
   priceUgx?: number;
+  overlays?: TextOverlay[] | null;
 }
 
 /**
@@ -90,6 +92,7 @@ export class ContentService {
       sizeBytes: input.sizeBytes,
       pricing,
       priceUgx,
+      overlays: input.overlays ?? null,
       status: "draft",
     });
   }
@@ -120,6 +123,7 @@ export class ContentService {
 
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
+    if (input.overlays !== undefined) patch.overlays = input.overlays;
 
     // Pricing status change (§4.5.1). Note: already-distributed copies are not
     // recalled (free→paid) and existing buyers keep access (paid→free); the app

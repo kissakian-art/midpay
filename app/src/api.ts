@@ -57,11 +57,26 @@ export interface User {
   displayName: string | null;
 }
 
+/**
+ * A creator text overlay drawn over the media in the player (composed at
+ * playback, never baked in). Coords normalized to the media rect; (x,y) = the
+ * overlay box's top-left. Mirrors the backend `TextOverlay`.
+ */
+export interface TextOverlay {
+  text: string;
+  x: number;
+  y: number;
+  size: number; // font size as a fraction of media width
+  color: string;
+  bg: string | null; // shape background colour, or null for none
+}
+
 export interface FeedItem {
   id: string;
   kind: "video" | "photo" | "text";
   title: string | null;
   description: string | null;
+  overlays?: TextOverlay[] | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */
@@ -157,6 +172,7 @@ export const createContent = (input: {
   pricing: "free" | "paid";
   priceUgx?: number;
   durationSeconds?: number;
+  overlays?: TextOverlay[];
 }) => req<{ content: { id: string } }>("/content", { method: "POST", json: input });
 
 export async function uploadMedia(
