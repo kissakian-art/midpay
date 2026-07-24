@@ -12,6 +12,7 @@ import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import PostViewerScreen from "./src/screens/PostViewerScreen";
+import SearchScreen from "./src/screens/SearchScreen";
 import StudioScreen from "./src/screens/StudioScreen";
 import UserProfileScreen from "./src/screens/UserProfileScreen";
 import { colors } from "./src/theme";
@@ -104,6 +105,15 @@ function Root() {
             name="PostViewer"
             component={PostViewerScreen}
             options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Search"
+            component={SearchScreen}
+            options={{
+              title: "Search",
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+            }}
           />
           <Stack.Screen
             name="Conversation"

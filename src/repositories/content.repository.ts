@@ -153,6 +153,46 @@ export class ContentRepository {
       .all();
   }
 
+  /** A single content item in full feed shape (creator identity joined). */
+  findFeedItemById(id: string): Promise<FeedItem | undefined> {
+    return this.db
+      .select({
+        id: content.id,
+        creatorId: content.creatorId,
+        kind: content.kind,
+        title: content.title,
+        description: content.description,
+        overlays: content.overlays,
+        textStyle: content.textStyle,
+        musicTrackId: content.musicTrackId,
+        musicStartMs: content.musicStartMs,
+        musicEndMs: content.musicEndMs,
+        r2Key: content.r2Key,
+        thumbnailR2Key: content.thumbnailR2Key,
+        durationSeconds: content.durationSeconds,
+        sizeBytes: content.sizeBytes,
+        pricing: content.pricing,
+        priceUgx: content.priceUgx,
+        status: content.status,
+        likeCount: content.likeCount,
+        commentCount: content.commentCount,
+        purchaseCount: content.purchaseCount,
+        publishedAt: content.publishedAt,
+        createdAt: content.createdAt,
+        updatedAt: content.updatedAt,
+        deletedAt: content.deletedAt,
+        creatorHandle: users.handle,
+        creatorDisplayName: users.displayName,
+        creatorUserId: users.id,
+        creatorAvatarR2Key: users.avatarR2Key,
+      })
+      .from(content)
+      .innerJoin(creators, eq(creators.id, content.creatorId))
+      .innerJoin(users, eq(users.id, creators.userId))
+      .where(eq(content.id, id))
+      .get();
+  }
+
   /** Adjust a denormalized social counter by ±1, clamped at 0. */
   bumpCounter(id: string, field: "likeCount" | "commentCount", delta: 1 | -1): Promise<unknown> {
     const col = field === "likeCount" ? content.likeCount : content.commentCount;

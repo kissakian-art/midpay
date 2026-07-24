@@ -13,6 +13,7 @@ import { messageRoutes } from "./routes/messages.routes";
 import { musicRoutes } from "./routes/music.routes";
 import { paymentsRoutes } from "./routes/payments.routes";
 import { reportRoutes } from "./routes/reports.routes";
+import { searchRoutes } from "./routes/search.routes";
 import { userRoutes } from "./routes/users.routes";
 import type { AppEnv } from "./types";
 
@@ -42,6 +43,7 @@ export function createApp(): Hono<AppEnv> {
   app.route("/creators", creatorRoutes);
   app.route("/content", contentRoutes);
   app.route("/music", musicRoutes);
+  app.route("/search", searchRoutes);
   app.route("/live", liveRoutes);
   app.route("/payments", paymentsRoutes);
   app.route("/reports", reportRoutes);

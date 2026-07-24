@@ -12,6 +12,7 @@ import { MessagingRepository } from "../repositories/messaging.repository";
 import { MusicRepository } from "../repositories/music.repository";
 import { ModerationRepository } from "../repositories/moderation.repository";
 import { OtpRepository } from "../repositories/otp.repository";
+import { SearchRepository } from "../repositories/search.repository";
 import { PayoutRepository } from "../repositories/payout.repository";
 import { SocialRepository } from "../repositories/social.repository";
 import { TransactionRepository } from "../repositories/transaction.repository";
@@ -33,6 +34,7 @@ import { FlutterwaveClient } from "../services/payments/flutterwave";
 import { PaymentsService } from "../services/payments/payments.service";
 import { PayoutService } from "../services/payout.service";
 import { ProfileService } from "../services/profile.service";
+import { SearchService } from "../services/search.service";
 import { StorageService } from "../services/storage/storage.service";
 
 /**
@@ -58,6 +60,7 @@ export interface Container {
   profile: ProfileService;
   messaging: MessagingService;
   music: MusicService;
+  search: SearchService;
 }
 
 export function createContainer(env: Env): Container {
@@ -80,6 +83,7 @@ export function createContainer(env: Env): Container {
   const socialRepo = new SocialRepository(db);
   const messagingRepo = new MessagingRepository(db);
   const musicRepo = new MusicRepository(db);
+  const searchRepo = new SearchRepository(db);
 
   const config = new ConfigService(db, env);
   const flw = new FlutterwaveClient(env);
@@ -109,6 +113,7 @@ export function createContainer(env: Env): Container {
   const profile = new ProfileService(users, storage);
   const messaging = new MessagingService(messagingRepo, users);
   const music = new MusicService(musicRepo, storage);
+  const search = new SearchService(searchRepo);
 
   return {
     db,
@@ -128,5 +133,6 @@ export function createContainer(env: Env): Container {
     messaging,
     profile,
     music,
+    search,
   };
 }

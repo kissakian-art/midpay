@@ -115,6 +115,11 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
         }
       />
 
+      {/* Search shortcut (top-right, TikTok-style). */}
+      <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate("Search")} hitSlop={10}>
+        <Text style={s.searchIcon}>🔍</Text>
+      </TouchableOpacity>
+
       <CommentsSheet item={commentsFor} onClose={() => setCommentsFor(null)} />
     </View>
   );
@@ -126,4 +131,16 @@ const s = StyleSheet.create({
   emptyText: { color: colors.dim, marginTop: 6, textAlign: "center" },
   reloadBtn: { marginTop: 16, backgroundColor: colors.card, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 24 },
   reloadText: { color: colors.accent, fontWeight: "700" },
+  searchBtn: {
+    position: "absolute",
+    top: 52,
+    right: 14,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  searchIcon: { fontSize: 20 },
 });

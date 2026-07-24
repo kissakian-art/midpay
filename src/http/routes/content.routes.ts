@@ -33,6 +33,12 @@ contentRoutes.get("/:id", async (c) => {
   return c.json({ content: item });
 });
 
+// Public — a single item in full feed shape (to open a post from search).
+contentRoutes.get("/:id/card", async (c) => {
+  const item = await c.get("container").content.getCard(c.req.param("id"));
+  return c.json({ item });
+});
+
 /** Parse an HTTP Range header ("bytes=start-end") into an R2Range, if present. */
 function parseRange(header: string | undefined): R2Range | undefined {
   if (!header) return undefined;

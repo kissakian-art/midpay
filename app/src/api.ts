@@ -256,6 +256,19 @@ export async function uploadMedia(
 export const publishContent = (contentId: string) =>
   req(`/content/${contentId}/publish`, { method: "POST" });
 
+/** A single post in full feed shape (to open from search / deep links). */
+export const getCard = (contentId: string) =>
+  req<{ item: FeedItem }>(`/content/${contentId}/card`);
+
+// --- Search ---
+export interface SearchResults {
+  creators: { id: string; handle: string; displayName: string | null; avatarR2Key: string | null }[];
+  posts: FeedItem[];
+  sounds: { id: string; title: string; artist: string | null }[];
+  comments: { id: string; body: string; contentId: string; authorHandle: string }[];
+}
+export const search = (q: string) => req<SearchResults>(`/search?q=${encodeURIComponent(q)}`);
+
 // --- Payments ---
 export const checkout = (type: "video_unlock" | "live_ticket", targetId: string) =>
   req<{ transactionId: string; txRef: string; simulated: boolean }>("/payments/checkout", {

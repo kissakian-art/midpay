@@ -197,6 +197,14 @@ export class ContentService {
     return item;
   }
 
+  /** A single item in full feed shape (creator identity joined) — used to open
+   *  a post from search results / deep links. */
+  async getCard(id: string) {
+    const item = await this.content.findFeedItemById(id);
+    if (!item || item.status === "deleted") throw notFound("content");
+    return { ...item, owned: false };
+  }
+
   /**
    * Global feed (newest published first) with simple time cursor. When a
    * signed-in viewer is known, each paid item is decorated with `owned` so the
