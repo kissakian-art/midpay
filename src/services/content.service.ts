@@ -18,6 +18,8 @@ export interface CreateContentInput {
   pricing?: "free" | "paid";
   priceUgx?: number;
   overlays?: TextOverlay[] | null;
+  musicTrackId?: string | null;
+  musicStartMs?: number | null;
 }
 
 export interface UpdateContentInput {
@@ -26,6 +28,8 @@ export interface UpdateContentInput {
   pricing?: "free" | "paid";
   priceUgx?: number;
   overlays?: TextOverlay[] | null;
+  musicTrackId?: string | null;
+  musicStartMs?: number | null;
 }
 
 /**
@@ -93,6 +97,8 @@ export class ContentService {
       pricing,
       priceUgx,
       overlays: input.overlays ?? null,
+      musicTrackId: input.musicTrackId ?? null,
+      musicStartMs: input.musicStartMs ?? null,
       status: "draft",
     });
   }
@@ -124,6 +130,8 @@ export class ContentService {
     if (input.title !== undefined) patch.title = input.title;
     if (input.description !== undefined) patch.description = input.description;
     if (input.overlays !== undefined) patch.overlays = input.overlays;
+    if (input.musicTrackId !== undefined) patch.musicTrackId = input.musicTrackId;
+    if (input.musicStartMs !== undefined) patch.musicStartMs = input.musicStartMs;
 
     // Pricing status change (§4.5.1). Note: already-distributed copies are not
     // recalled (free→paid) and existing buyers keep access (paid→free); the app

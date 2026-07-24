@@ -29,6 +29,11 @@ export class StorageService {
     return `users/${userId}/avatar/${crypto.randomUUID()}`;
   }
 
+  /** Audio track object key, namespaced per track. */
+  musicKey(trackId: string): string {
+    return `music/${trackId}/audio/${crypto.randomUUID()}`;
+  }
+
   async put(
     key: string,
     body: ReadableStream | ArrayBuffer,

@@ -9,6 +9,7 @@ import { CreatorRepository } from "../repositories/creator.repository";
 import { EntitlementRepository } from "../repositories/entitlement.repository";
 import { LiveRepository } from "../repositories/live.repository";
 import { MessagingRepository } from "../repositories/messaging.repository";
+import { MusicRepository } from "../repositories/music.repository";
 import { ModerationRepository } from "../repositories/moderation.repository";
 import { OtpRepository } from "../repositories/otp.repository";
 import { PayoutRepository } from "../repositories/payout.repository";
@@ -26,6 +27,7 @@ import { ConfigService } from "../services/config.service";
 import { ContentService } from "../services/content.service";
 import { LiveService } from "../services/live.service";
 import { MessagingService } from "../services/messaging.service";
+import { MusicService } from "../services/music.service";
 import { SocialService } from "../services/social.service";
 import { FlutterwaveClient } from "../services/payments/flutterwave";
 import { PaymentsService } from "../services/payments/payments.service";
@@ -55,6 +57,7 @@ export interface Container {
   social: SocialService;
   profile: ProfileService;
   messaging: MessagingService;
+  music: MusicService;
 }
 
 export function createContainer(env: Env): Container {
@@ -76,6 +79,7 @@ export function createContainer(env: Env): Container {
   const analyticsRepo = new AnalyticsRepository(db);
   const socialRepo = new SocialRepository(db);
   const messagingRepo = new MessagingRepository(db);
+  const musicRepo = new MusicRepository(db);
 
   const config = new ConfigService(db, env);
   const flw = new FlutterwaveClient(env);
@@ -104,6 +108,7 @@ export function createContainer(env: Env): Container {
   const social = new SocialService(socialRepo, users, contentRepo, creators);
   const profile = new ProfileService(users, storage);
   const messaging = new MessagingService(messagingRepo, users);
+  const music = new MusicService(musicRepo, storage);
 
   return {
     db,
@@ -122,5 +127,6 @@ export function createContainer(env: Env): Container {
     social,
     messaging,
     profile,
+    music,
   };
 }

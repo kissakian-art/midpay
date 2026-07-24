@@ -1,3 +1,4 @@
+import { useAudioPlayer } from "expo-audio";
 import * as ScreenCapture from "expo-screen-capture";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
 import React, { useEffect, useState } from "react";
@@ -19,6 +20,7 @@ import {
   follow,
   like,
   mediaUrl,
+  musicAudioUrl,
   unfollow,
   unlike,
   type FeedItem,
@@ -62,6 +64,11 @@ export default function FeedItemView({
     p.loop = true;
   });
 
+  // A post can play its own music track OVER the media (composed at playback).
+  // When present, mute the original video audio and loop the track in sync.
+  const hasMusic = unlocked && item.kind !== "text" && !!item.musicTrackId;
+  const audio = useAudioPlayer(hasMusic ? { uri: musicAudioUrl(item.musicTrackId as string) } : null);
+
   useEffect(() => {
     if (!unlocked) return;
     const source: VideoSource = { uri: mediaUrl(item.id), headers: authHeaders() };
@@ -69,9 +76,26 @@ export default function FeedItemView({
   }, [unlocked, item.id, player]);
 
   useEffect(() => {
+    player.muted = hasMusic;
+  }, [player, hasMusic]);
+
+  useEffect(() => {
     if (active && unlocked) player.play();
     else player.pause();
   }, [active, unlocked, player]);
+
+  useEffect(() => {
+    if (!hasMusic) return;
+    audio.loop = true;
+    if (active) {
+      const startSec = (item.musicStartMs ?? 0) / 1000;
+      if (startSec > 0) audio.seekTo(startSec).catch(() => {});
+      audio.play();
+    } else {
+      audio.pause();
+    }
+    return () => audio.pause();
+  }, [active, hasMusic, audio, item.musicStartMs]);
 
   // §4.4 content protection: while a PAID video is on screen, block screen
   // capture (FLAG_SECURE on Android / capture detection on iOS). Free content

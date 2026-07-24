@@ -170,6 +170,8 @@ contentRoutes.post("/", async (c) => {
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
     overlays: readOverlays(body),
+    musicTrackId: optionalString(body, "musicTrackId"),
+    musicStartMs: optionalInt(body, "musicStartMs"),
   });
   return c.json({ content: item }, 201);
 });
@@ -183,6 +185,8 @@ contentRoutes.patch("/:id", async (c) => {
     pricing: readPricing(body),
     priceUgx: optionalInt(body, "priceUgx"),
     overlays: readOverlays(body),
+    musicTrackId: optionalString(body, "musicTrackId"),
+    musicStartMs: optionalInt(body, "musicStartMs"),
   });
   return c.json({ content: item });
 });

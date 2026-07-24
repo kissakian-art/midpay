@@ -41,6 +41,11 @@ export const content = sqliteTable(
     // Creator text overlays (§ compose-at-playback). JSON array; NULL when none.
     overlays: text("overlays", { mode: "json" }).$type<TextOverlay[]>(),
 
+    // Optional background music (§ compose-at-playback): a reference to a track
+    // (see music.ts) played over the media, from `musicStartMs` into the track.
+    musicTrackId: uuidRef("music_track_id"),
+    musicStartMs: integer("music_start_ms"),
+
     // Media pointers — R2 only (§2.2).
     r2Key: text("r2_key"), // encoded media object
     thumbnailR2Key: text("thumbnail_r2_key"),

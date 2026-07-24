@@ -144,12 +144,33 @@ sidesteps the video-encoder wall that blocked filtered video).
   in the feed in the same spot. **Also flag:** editor uses a COVER preview to
   match the feed; on very different aspect ratios positions may drift slightly.
 
-### Music on media — designed, NOT built (next)
+### Music on media — v1 SHIPPED 2026-07-24 (needs device test)
 
-3 sources confirmed by owner: device audio / admin royalty-free catalog /
-reusable creator "original sound". Compose-at-playback (expo-video + expo-audio),
-same pattern as overlays. See [[music-feature-design]] memory. Service providers
-(Flutterwave/SMS) are on hold per owner (2026-07-24).
+Compose-at-playback (never muxed into the file), same pattern as overlays.
+- **Backend (deployed):** `tracks` table (owner, source device|catalog, title,
+  artist, r2Key, isPublic); `content.musicTrackId` + `musicStartMs`.
+  `MusicRepository`/`MusicService`; routes under `/music`: `GET /tracks` (public
+  library + search, optional-auth surfaces own), `GET /tracks/:id/audio` (public,
+  Range-enabled), `POST /tracks` + `PUT /tracks/:id/audio` (auth). Threaded music
+  into content create/update + feed selects. Migration `0003_wild_expediter.sql`
+  applied to remote D1; deployed. Verified end-to-end via API (upload→list→
+  attach→stream→persist all confirmed).
+- **App:** new deps `expo-audio` + `expo-document-picker` (+ `expo-asset` peer —
+  REQUIRED, app crashes without it). `components/MusicPicker.tsx` (search shared
+  library + "Upload from device" via DocumentPicker → createTrack → upload →
+  auto-select). Studio review has a 🎵 Music button. `FeedItemView` plays the
+  track over the media via `useAudioPlayer` (loops, syncs to the active cell,
+  **mutes the original video audio** when music is attached).
+- **NEEDS ON-DEVICE TEST + NEW BUILD** (native modules → rebuild required; test
+  alongside overlays). Pick/upload a sound, post, confirm it plays in the feed.
+- **v1 sources:** device audio + shared public library (= reuse of others'
+  uploads, source #3). **Deferred:** admin-curated catalog UI (owner upload as
+  `source:catalog`; the service already supports it, just needs an admin-gated
+  route + UI), "original sound" extracted from a video's own audio, and
+  trim/volume UI (`musicStartMs` is wired end-to-end but the picker sends 0).
+  See [[music-feature-design]].
+
+Service providers (Flutterwave/SMS) remain on hold per owner (2026-07-24).
 
 ---
 

@@ -71,12 +71,23 @@ export interface TextOverlay {
   bg: string | null; // shape background colour, or null for none
 }
 
+/** A reusable audio track a post can play over its media. */
+export interface Track {
+  id: string;
+  title: string;
+  artist: string | null;
+  source: "device" | "catalog";
+  durationSeconds: number | null;
+}
+
 export interface FeedItem {
   id: string;
   kind: "video" | "photo" | "text";
   title: string | null;
   description: string | null;
   overlays?: TextOverlay[] | null;
+  musicTrackId?: string | null;
+  musicStartMs?: number | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */
@@ -173,7 +184,33 @@ export const createContent = (input: {
   priceUgx?: number;
   durationSeconds?: number;
   overlays?: TextOverlay[];
+  musicTrackId?: string;
+  musicStartMs?: number;
 }) => req<{ content: { id: string } }>("/content", { method: "POST", json: input });
+
+// --- Music ---
+/** Public audio URL for a track (streamed straight to the player). */
+export const musicAudioUrl = (trackId: string) => `${API_URL}/music/tracks/${trackId}/audio`;
+
+export const listTracks = (q?: string) =>
+  req<{ tracks: Track[] }>(`/music/tracks${q ? `?q=${encodeURIComponent(q)}` : ""}`);
+
+export const createTrack = (input: { title: string; artist?: string; durationSeconds?: number }) =>
+  req<{ track: Track }>("/music/tracks", { method: "POST", json: input });
+
+export async function uploadTrackAudio(
+  trackId: string,
+  fileUri: string,
+  contentType: string,
+): Promise<void> {
+  const blob = await (await fetch(fileUri)).blob();
+  const res = await fetch(`${API_URL}/music/tracks/${trackId}/audio`, {
+    method: "PUT",
+    headers: { "content-type": contentType, ...authHeaders() },
+    body: blob,
+  });
+  if (!res.ok) throw new ApiError(res.status, "upload_failed", "Audio upload failed");
+}
 
 export async function uploadMedia(
   contentId: string,

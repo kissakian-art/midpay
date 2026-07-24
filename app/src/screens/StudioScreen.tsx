@@ -29,10 +29,11 @@ import {
   uploadThumbnail,
 } from "../api";
 import OverlayEditor from "../components/OverlayEditor";
+import MusicPicker from "../components/MusicPicker";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
 import { bakeFilterIntoPhoto } from "../studio/skiaFilter";
-import { type TextOverlay } from "../api";
+import { type TextOverlay, type Track } from "../api";
 
 const MAX_SECONDS = 300; // §4.3 five-minute clip cap
 
@@ -77,6 +78,8 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
 
   const [capture, setCapture] = useState<Capture | null>(null);
   const [overlays, setOverlays] = useState<TextOverlay[]>([]);
+  const [music, setMusic] = useState<Track | null>(null);
+  const [musicOpen, setMusicOpen] = useState(false);
   const [textBody, setTextBody] = useState("");
   const [paid, setPaid] = useState(false);
   const priceUgx = 5000;
@@ -111,14 +114,16 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
     );
   }
 
-  // Open a fresh review with no leftover overlays from a previous take.
+  // Open a fresh review with no leftover overlays/music from a previous take.
   const openCapture = (c: Capture) => {
     setOverlays([]);
+    setMusic(null);
     setCapture(c);
   };
   const closeReview = () => {
     setCapture(null);
     setOverlays([]);
+    setMusic(null);
   };
 
   const takePhoto = async () => {
@@ -209,6 +214,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx } : {}),
         ...(overlays.length ? { overlays } : {}),
+        ...(music ? { musicTrackId: music.id } : {}),
       });
       setBusy("Uploading…");
       await uploadMedia(
@@ -421,6 +427,19 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           ) : null}
 
           <View style={s.reviewBar}>
+            <TouchableOpacity style={s.musicBtn} onPress={() => setMusicOpen(true)}>
+              <Text style={s.musicBtnText} numberOfLines={1}>
+                {music ? `🎵  ${music.title}` : "🎵  Add music"}
+              </Text>
+              {music ? (
+                <TouchableOpacity onPress={() => setMusic(null)} hitSlop={10}>
+                  <Text style={s.musicClear}>✕</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={s.musicChevron}>›</Text>
+              )}
+            </TouchableOpacity>
+
             <View style={s.priceRow}>
               <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
                 <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
@@ -440,6 +459,13 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
             </View>
           </View>
         </View>
+
+        <MusicPicker
+          visible={musicOpen}
+          currentTrackId={music?.id ?? null}
+          onSelect={setMusic}
+          onClose={() => setMusicOpen(false)}
+        />
       </Modal>
     </View>
   );
@@ -575,6 +601,20 @@ const s = StyleSheet.create({
   busyText: { color: colors.text, marginTop: 12 },
   reviewRoot: { flex: 1, backgroundColor: "#000" },
   reviewBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, backgroundColor: colors.bg },
+  musicBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: colors.card,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  musicBtnText: { color: colors.text, fontWeight: "700", flex: 1 },
+  musicClear: { color: colors.dim, fontSize: 15, fontWeight: "800", paddingHorizontal: 4 },
+  musicChevron: { color: colors.dim, fontSize: 20, fontWeight: "800" },
   priceRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   toggle: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   toggleActive: { backgroundColor: colors.accent, borderColor: colors.accent },

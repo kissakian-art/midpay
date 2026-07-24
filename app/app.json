@@ -41,7 +41,9 @@
         {
           "photosPermission": "MidPay needs access to your library to upload existing videos."
         }
-      ]
+      ],
+      "expo-audio",
+      "expo-asset"
     ],
     "extra": {
       "apiUrl": "https://midpay-backend.midpay.workers.dev",

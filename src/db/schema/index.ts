@@ -6,6 +6,7 @@ export * from "./users";
 export * from "./auth";
 export * from "./creators";
 export * from "./content";
+export * from "./music";
 export * from "./social";
 export * from "./live";
 export * from "./ledger";
