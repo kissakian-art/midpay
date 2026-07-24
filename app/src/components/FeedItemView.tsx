@@ -1,11 +1,13 @@
 import { useAudioPlayer } from "expo-audio";
 import * as ScreenCapture from "expo-screen-capture";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  PanResponder,
   Platform,
+  Pressable,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -39,6 +41,30 @@ interface Props {
   onOpenProfile: (item: FeedItem) => void;
 }
 
+const SCRUB_MARGIN = 12;
+
+/** Map a touch X to a seek time and update the visible position. */
+function scrubTo(
+  state: { duration: number; width: number },
+  pageX: number,
+  seekTarget: React.MutableRefObject<number>,
+  setPosition: (n: number) => void,
+) {
+  const { duration, width } = state;
+  if (!duration) return;
+  const trackW = width - SCRUB_MARGIN * 2;
+  const frac = Math.min(1, Math.max(0, (pageX - SCRUB_MARGIN) / trackW));
+  const t = frac * duration;
+  seekTarget.current = t;
+  setPosition(t);
+}
+
+function mmss(sec: number): string {
+  const s = Math.max(0, Math.floor(sec));
+  const m = Math.floor(s / 60);
+  return `${m}:${(s % 60).toString().padStart(2, "0")}`;
+}
+
 /**
  * One full-screen feed cell: video (free = plays immediately; paid = locked
  * behind a buy overlay), with the right-rail actions (like/comment/DM).
@@ -60,9 +86,18 @@ export default function FeedItemView({
   const [following, setFollowing] = useState(false);
   const [likeCount, setLikeCount] = useState(item.likeCount);
 
+  // Playback controls (tap-to-pause + scrubber), video only.
+  const [paused, setPaused] = useState(false);
+  const [duration, setDuration] = useState(0);
+  const [position, setPosition] = useState(0);
+  const scrubbing = useRef(false);
+  const seekTarget = useRef(0);
+
   const player = useVideoPlayer(null, (p) => {
     p.loop = true;
   });
+
+  const isVideo = unlocked && item.kind === "video";
 
   // A post can play its own music track OVER the media (composed at playback).
   // When present, mute the original video audio and loop the track in sync.
@@ -79,10 +114,18 @@ export default function FeedItemView({
     player.muted = hasMusic;
   }, [player, hasMusic]);
 
+  const playing = active && unlocked && !paused;
+
   useEffect(() => {
-    if (active && unlocked) player.play();
+    if (playing) player.play();
     else player.pause();
-  }, [active, unlocked, player]);
+  }, [playing, player]);
+
+  // A cell that scrolls off-screen should forget any manual pause so it
+  // autoplays fresh next time it becomes active.
+  useEffect(() => {
+    if (!active) setPaused(false);
+  }, [active]);
 
   useEffect(() => {
     if (!hasMusic) return;
@@ -92,7 +135,7 @@ export default function FeedItemView({
     // as cells recycle during fast scrolling.
     try {
       audio.loop = true;
-      if (active) {
+      if (playing) {
         const startSec = (item.musicStartMs ?? 0) / 1000;
         if (startSec > 0) audio.seekTo(startSec).catch(() => {});
         audio.play();
@@ -102,7 +145,45 @@ export default function FeedItemView({
     } catch {
       // player was already released — nothing to do
     }
-  }, [active, hasMusic, audio, item.musicStartMs]);
+  }, [playing, hasMusic, audio, item.musicStartMs]);
+
+  // Track playback position for the scrubber (active video only).
+  useEffect(() => {
+    if (!isVideo || !active) return;
+    const id = setInterval(() => {
+      if (scrubbing.current) return;
+      try {
+        if (player.duration) setDuration(player.duration);
+        setPosition(player.currentTime || 0);
+      } catch {
+        // player not ready
+      }
+    }, 300);
+    return () => clearInterval(id);
+  }, [isVideo, active, player]);
+
+  // Scrubber drag → seek. Latest-ref so the one-time PanResponder isn't stale.
+  const scrubState = useRef({ player, duration, width });
+  scrubState.current = { player, duration, width };
+  const scrub = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (e) => {
+        scrubbing.current = true;
+        scrubTo(scrubState.current, e.nativeEvent.pageX, seekTarget, setPosition);
+      },
+      onPanResponderMove: (e) => scrubTo(scrubState.current, e.nativeEvent.pageX, seekTarget, setPosition),
+      onPanResponderRelease: () => {
+        try {
+          scrubState.current.player.currentTime = seekTarget.current;
+        } catch {
+          // ignore
+        }
+        scrubbing.current = false;
+      },
+    }),
+  ).current;
 
   // §4.4 content protection: while a PAID video is on screen, block screen
   // capture (FLAG_SECURE on Android / capture detection on iOS). Free content
@@ -194,6 +275,11 @@ export default function FeedItemView({
         </View>
       )}
 
+      {/* Tap anywhere on the video to pause/resume (and reveal the scrubber). */}
+      {isVideo ? (
+        <Pressable style={StyleSheet.absoluteFill} onPress={() => setPaused((p) => !p)} />
+      ) : null}
+
       {/* Creator text overlays — only over real media the viewer can see. */}
       {unlocked && item.kind !== "text" ? (
         <TextOverlayLayer overlays={item.overlays} width={width} height={height} />
@@ -247,6 +333,33 @@ export default function FeedItemView({
           <Text style={s.actionLabel}>DM</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Big play glyph while paused. */}
+      {isVideo && paused ? (
+        <View pointerEvents="none" style={s.playIconWrap}>
+          <Text style={s.playIcon}>▶</Text>
+        </View>
+      ) : null}
+
+      {/* Scrubber — appears on tap (while paused); drag to seek. */}
+      {isVideo && paused ? (
+        <View style={s.scrubberWrap} {...scrub.panHandlers}>
+          <Text style={s.scrubTime}>
+            {mmss(position)} / {mmss(duration)}
+          </Text>
+          <View style={s.scrubTrack}>
+            <View
+              style={[s.scrubFill, { width: duration ? `${(position / duration) * 100}%` : "0%" }]}
+            />
+            <View
+              style={[
+                s.scrubKnob,
+                { left: duration ? (position / duration) * (width - SCRUB_MARGIN * 2) - 7 : -7 },
+              ]}
+            />
+          </View>
+        </View>
+      ) : null}
     </View>
   );
 }
@@ -323,4 +436,53 @@ const s = StyleSheet.create({
   },
   followBadgeDone: { backgroundColor: colors.accent },
   followBadgeText: { color: "#fff", fontSize: 13, fontWeight: "900", lineHeight: 15 },
+  playIconWrap: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  playIcon: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 60,
+    textShadowColor: "rgba(0,0,0,0.5)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 6,
+  },
+  // Sits just above the tab bar; generous vertical padding = an easy grab target
+  // around the thin visible line.
+  scrubberWrap: {
+    position: "absolute",
+    left: SCRUB_MARGIN,
+    right: SCRUB_MARGIN,
+    bottom: 74,
+    paddingVertical: 10,
+  },
+  scrubTime: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 6,
+    fontVariant: ["tabular-nums"],
+    textShadowColor: "rgba(0,0,0,0.6)",
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+  },
+  scrubTrack: {
+    height: 3,
+    borderRadius: 2,
+    backgroundColor: "rgba(255,255,255,0.35)",
+    justifyContent: "center",
+  },
+  scrubFill: { height: 3, borderRadius: 2, backgroundColor: colors.accent },
+  scrubKnob: {
+    position: "absolute",
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: "#fff",
+  },
 });
