@@ -1,4 +1,5 @@
 import Constants from "expo-constants";
+import { File } from "expo-file-system";
 
 /** Backend base URL: env override → app.json extra → deployed default. */
 export const API_URL: string =
@@ -151,13 +152,26 @@ export const mediaUrl = (contentId: string) => `${API_URL}/content/${contentId}/
 export const thumbnailUrl = (contentId: string, version?: string | null) =>
   `${API_URL}/content/${contentId}/thumbnail${version ? `?v=${encodeURIComponent(version.slice(-12))}` : ""}`;
 
+/**
+ * Stream a local file to the backend with a binary PUT. Uses expo-file-system's
+ * native streaming upload instead of `fetch(uri).blob()` — the blob path base64-
+ * copies the whole file into the JS heap (OOM risk on large videos) and is more
+ * prone to connection resets on flaky networks.
+ */
+async function putFile(url: string, fileUri: string, contentType: string) {
+  return new File(fileUri).upload(url, {
+    httpMethod: "PUT",
+    headers: { "content-type": contentType, ...authHeaders() },
+  });
+}
+
 export async function uploadThumbnail(contentId: string, fileUri: string) {
-  const blob = await (await fetch(fileUri)).blob();
-  await fetch(`${API_URL}/content/${contentId}/thumbnail`, {
-    method: "PUT",
-    headers: { ...authHeaders(), "content-type": "image/jpeg" },
-    body: blob,
-  }).catch(() => {}); // thumbnail is best-effort; never block publishing
+  // Best-effort; never block publishing.
+  try {
+    await putFile(`${API_URL}/content/${contentId}/thumbnail`, fileUri, "image/jpeg");
+  } catch {
+    // ignore
+  }
 }
 
 export const like = (contentId: string) =>
@@ -203,13 +217,10 @@ export async function uploadTrackAudio(
   fileUri: string,
   contentType: string,
 ): Promise<void> {
-  const blob = await (await fetch(fileUri)).blob();
-  const res = await fetch(`${API_URL}/music/tracks/${trackId}/audio`, {
-    method: "PUT",
-    headers: { "content-type": contentType, ...authHeaders() },
-    body: blob,
-  });
-  if (!res.ok) throw new ApiError(res.status, "upload_failed", "Audio upload failed");
+  const res = await putFile(`${API_URL}/music/tracks/${trackId}/audio`, fileUri, contentType);
+  if (res.status < 200 || res.status >= 300) {
+    throw new ApiError(res.status, "upload_failed", "Audio upload failed");
+  }
 }
 
 export async function uploadMedia(
@@ -217,13 +228,10 @@ export async function uploadMedia(
   fileUri: string,
   contentType: string,
 ): Promise<void> {
-  const blob = await (await fetch(fileUri)).blob();
-  const res = await fetch(mediaUrl(contentId), {
-    method: "PUT",
-    headers: { "content-type": contentType, ...authHeaders() },
-    body: blob,
-  });
-  if (!res.ok) throw new ApiError(res.status, "upload_failed", "Media upload failed");
+  const res = await putFile(mediaUrl(contentId), fileUri, contentType);
+  if (res.status < 200 || res.status >= 300) {
+    throw new ApiError(res.status, "upload_failed", "Media upload failed");
+  }
 }
 
 export const publishContent = (contentId: string) =>
@@ -298,17 +306,18 @@ export const updateProfile = (input: {
   );
 
 export async function uploadAvatar(fileUri: string, contentType = "image/jpeg") {
-  const blob = await (await fetch(fileUri)).blob();
-  const res = await fetch(`${API_URL}/users/me/avatar`, {
-    method: "PUT",
-    headers: { ...authHeaders(), "content-type": contentType },
-    body: blob,
-  });
-  if (!res.ok) {
-    const body = (await res.json().catch(() => ({}))) as { error?: string; message?: string };
+  const res = await putFile(`${API_URL}/users/me/avatar`, fileUri, contentType);
+  const body = (() => {
+    try {
+      return JSON.parse(res.body) as { error?: string; message?: string; user?: { avatarR2Key: string | null } };
+    } catch {
+      return {} as { error?: string; message?: string; user?: { avatarR2Key: string | null } };
+    }
+  })();
+  if (res.status < 200 || res.status >= 300) {
     throw new ApiError(res.status, body.error ?? "upload_failed", body.message ?? "Avatar upload failed");
   }
-  return (await res.json()) as { user: { avatarR2Key: string | null } };
+  return { user: body.user ?? { avatarR2Key: null } };
 }
 
 export const profile = (userId: string) =>

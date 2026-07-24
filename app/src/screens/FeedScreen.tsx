@@ -97,6 +97,12 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
         getItemLayout={(_, index) => ({ length: listHeight, offset: listHeight * index, index })}
         onViewableItemsChanged={onViewable.current}
         viewabilityConfig={{ itemVisiblePercentThreshold: 60 }}
+        // Keep only a few full-screen cells mounted — each holds a video (and
+        // maybe audio) codec, so an unbounded window OOMs the app.
+        windowSize={3}
+        initialNumToRender={2}
+        maxToRenderPerBatch={2}
+        removeClippedSubviews
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

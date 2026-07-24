@@ -75,8 +75,19 @@ export async function bakeFilterIntoPhoto(uri: string, filter: Filter): Promise<
     const file = new File(Paths.cache, `midpay-filtered-${Date.now()}.jpg`);
     file.create();
     file.write(bytes);
+    const outUri = file.uri;
 
-    return { uri: file.uri, filtered: true };
+    // Free native Skia memory immediately — otherwise repeated filtered captures
+    // accumulate GPU/native allocations and eventually OOM the app.
+    for (const o of [snapshot, paint, surface, image, data]) {
+      try {
+        (o as { dispose?: () => void })?.dispose?.();
+      } catch {
+        // best-effort
+      }
+    }
+
+    return { uri: outUri, filtered: true };
   } catch {
     // Any native/encoding/IO failure must never block a post.
     return passthrough(uri);

@@ -86,15 +86,22 @@ export default function FeedItemView({
 
   useEffect(() => {
     if (!hasMusic) return;
-    audio.loop = true;
-    if (active) {
-      const startSec = (item.musicStartMs ?? 0) / 1000;
-      if (startSec > 0) audio.seekTo(startSec).catch(() => {});
-      audio.play();
-    } else {
-      audio.pause();
+    // expo-audio releases the player itself on unmount / when the source clears,
+    // so we never pause in cleanup (pausing a released player throws). All calls
+    // are guarded because the shared native object can be released underneath us
+    // as cells recycle during fast scrolling.
+    try {
+      audio.loop = true;
+      if (active) {
+        const startSec = (item.musicStartMs ?? 0) / 1000;
+        if (startSec > 0) audio.seekTo(startSec).catch(() => {});
+        audio.play();
+      } else {
+        audio.pause();
+      }
+    } catch {
+      // player was already released — nothing to do
     }
-    return () => audio.pause();
   }, [active, hasMusic, audio, item.musicStartMs]);
 
   // §4.4 content protection: while a PAID video is on screen, block screen
