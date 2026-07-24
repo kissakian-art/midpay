@@ -107,7 +107,9 @@ Download tip: use the phone over mobile data, or disable Chrome QUIC
 - **Filters — Stage 1 (photo baking) VERIFIED on device (2026-07-24).** Colour
   filters bake into captured photos via offscreen Skia (Noir → true grayscale,
   Vivid Pop → punchier, confirmed on a real Android dev build). **Stage 2 (live
-  WYSIWYG preview + video) is now the active requirement** — see §6.
+  WYSIWYG preview) was evaluated and DEFERRED (2026-07-24)** — VisionCamera v5
+  can't record filtered video yet, so the live-preview win would be photo-only;
+  not worth the bleeding-edge risk for a video-first app. See §6.
 - **Real credentials (need the user's accounts):**
   - **Flutterwave** — business verification in progress. When keys arrive:
     `wrangler secret put FLW_SECRET_KEY` and `FLW_WEBHOOK_HASH`, and payments go
@@ -171,13 +173,45 @@ npx eas-cli build -p android --profile development
 privacy face-blur filters — all **Stage 2** (VisionCamera + Skia frame processors
 + ML Kit face detector), unchanged from below.
 
-**PRODUCT REQUIREMENT confirmed by the user (2026-07-24):** the camera must be
+**PRODUCT REQUIREMENT confirmed by the user (2026-07-24):** the camera should be
 **WYSIWYG** — the filter shows *live while framing/recording*, not applied as a
 post-capture surprise at the review screen. "Bake after capture" (Stage 1) is
-only acceptable for gallery uploads. This makes Stage 2 (live preview) required,
-not optional, for the camera path. The Stage-1 native stack
-(Skia+reanimated+worklets) is proven to coexist on-device, so the main new risk
-in Stage 2 is adding react-native-vision-camera itself.
+fine for gallery uploads.
+
+### Stage 2 evaluation & DECISION — DEFERRED (2026-07-24)
+
+Investigated the live-preview path in depth. Findings (from the installed v5
+typings, not guesses):
+- Live filtered preview needs **VisionCamera v5** + Skia frame processors. v5
+  (`react-native-vision-camera@5.1.1`, published 2026-07-17) is a **ground-up
+  rewrite** with a new output-based API (`usePhotoOutput` / `useVideoOutput` /
+  `useFrameOutput`) and a `<SkiaCamera onFrame={(frame,render)=>…}>` component.
+- v5 standardised on `react-native-worklets` (same as reanimated 4) — the old
+  worklets-core Android conflict is a **v4** problem, not v5.
+- **What v5 CAN do:** live filtered *preview* (SkiaCamera + `ColorFilter.MakeMatrix`,
+  same matrices as Stage 1) and filtered *photos* via `SkiaCameraRef.takeSnapshot()`
+  (returns the rendered filtered frame — true WYSIWYG, but preview-resolution).
+- **What v5 CANNOT do (the blocker):** record **filtered video**. `SkiaCamera`
+  exposes no recording; a video output taps the **raw** camera stream, not the
+  Skia-rendered output. v4 could do this; v5's rewrite hasn't reimplemented it.
+
+**Why deferred:** MidPay is **video-first**, so a photo-only live-preview win
+doesn't justify adding ~6 bleeding-edge native modules (nitro-based, a week old,
+**unproven on RN 0.86**, still stabilising). Stage 1 already applies filters to
+photos; the only gap is the live preview, a nicety. Better ROI on launch-critical
+work (payments go-live, SMS provider, feed polish). Also flagged: real-time GPU
+frame processing is a perf question on low-end Ugandan Androids — validate before
+committing the architecture.
+
+**The 5 VisionCamera/nitro packages were uninstalled** to keep the build lean and
+off RN-0.86 compile risk. Kept: `@shopify/react-native-skia@2.6.2`,
+`react-native-reanimated@4.5.0`, `react-native-worklets@0.10.0` (proven to
+coexist, needed when we revisit). tsc + `expo export` clean after the revert.
+
+**REVISIT WHEN:** VisionCamera v5 (or later) supports recording the Skia-rendered
+(filtered) output into video. Then the full WYSIWYG camera (preview + photo +
+video + privacy face-blur) becomes worth the integration. Until then, Stage 1 is
+the shipping baseline.
 
 **Why it's hard / why it's not done yet:**
 - `expo-camera` (current camera) renders a **native preview JS can't touch** — it
