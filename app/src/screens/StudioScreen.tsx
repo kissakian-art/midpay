@@ -30,6 +30,7 @@ import {
 } from "../api";
 import OverlayEditor from "../components/OverlayEditor";
 import MusicPicker from "../components/MusicPicker";
+import MusicTrimmer from "../components/MusicTrimmer";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
 import { bakeFilterIntoPhoto } from "../studio/skiaFilter";
@@ -79,6 +80,8 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [capture, setCapture] = useState<Capture | null>(null);
   const [overlays, setOverlays] = useState<TextOverlay[]>([]);
   const [music, setMusic] = useState<Track | null>(null);
+  const [musicStart, setMusicStart] = useState(0);
+  const [musicEnd, setMusicEnd] = useState<number | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
   const [textBody, setTextBody] = useState("");
   const [paid, setPaid] = useState(false);
@@ -114,16 +117,34 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
     );
   }
 
+  // Choosing a track resets its segment; the trimmer re-seeds a default.
+  const selectMusic = (t: Track | null) => {
+    setMusic(t);
+    setMusicStart(0);
+    setMusicEnd(null);
+  };
+
+  // Music fields for createContent. Video omits musicEndMs (capped to the video
+  // at playback); photo/text carry the trimmed [start, end] segment.
+  const musicParams = () =>
+    music
+      ? {
+          musicTrackId: music.id,
+          musicStartMs: musicStart,
+          ...(musicEnd != null ? { musicEndMs: musicEnd } : {}),
+        }
+      : {};
+
   // Open a fresh review with no leftover overlays/music from a previous take.
   const openCapture = (c: Capture) => {
     setOverlays([]);
-    setMusic(null);
+    selectMusic(null);
     setCapture(c);
   };
   const closeReview = () => {
     setCapture(null);
     setOverlays([]);
-    setMusic(null);
+    selectMusic(null);
   };
 
   const takePhoto = async () => {
@@ -214,7 +235,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx } : {}),
         ...(overlays.length ? { overlays } : {}),
-        ...(music ? { musicTrackId: music.id } : {}),
+        ...musicParams(),
       });
       setBusy("Uploading…");
       await uploadMedia(
@@ -254,10 +275,12 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         description: body,
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx } : {}),
+        ...musicParams(),
       });
       await publishContent(content.id);
       setBusy(null);
       setTextBody("");
+      selectMusic(null);
       setCreateMode("camera");
       Alert.alert("Posted!", "Your text post is live on the feed.");
       navigation.navigate("FeedTab");
@@ -313,6 +336,33 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           autoFocus
         />
         <Text style={s.counter}>{textBody.length}/1000</Text>
+
+        <View style={s.composerPad}>
+          <TouchableOpacity style={s.musicBtn} onPress={() => setMusicOpen(true)}>
+            <Text style={s.musicBtnText} numberOfLines={1}>
+              {music ? `🎵  ${music.title}` : "🎵  Add music (optional)"}
+            </Text>
+            {music ? (
+              <TouchableOpacity onPress={() => selectMusic(null)} hitSlop={10}>
+                <Text style={s.musicClear}>✕</Text>
+              </TouchableOpacity>
+            ) : (
+              <Text style={s.musicChevron}>›</Text>
+            )}
+          </TouchableOpacity>
+          {music ? (
+            <MusicTrimmer
+              trackId={music.id}
+              startMs={musicStart}
+              endMs={musicEnd}
+              onChange={(sMs, eMs) => {
+                setMusicStart(sMs);
+                setMusicEnd(eMs);
+              }}
+            />
+          ) : null}
+        </View>
+
         <View style={[s.priceRow, s.composerPad]}>
           <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
             <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
@@ -329,6 +379,13 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           {busy ? <ActivityIndicator color="#000" /> : <Text style={s.primaryBtnText}>Post</Text>}
         </TouchableOpacity>
         {modeStrip}
+
+        <MusicPicker
+          visible={musicOpen}
+          currentTrackId={music?.id ?? null}
+          onSelect={selectMusic}
+          onClose={() => setMusicOpen(false)}
+        />
       </KeyboardAvoidingView>
     );
   }
@@ -432,13 +489,26 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
                 {music ? `🎵  ${music.title}` : "🎵  Add music"}
               </Text>
               {music ? (
-                <TouchableOpacity onPress={() => setMusic(null)} hitSlop={10}>
+                <TouchableOpacity onPress={() => selectMusic(null)} hitSlop={10}>
                   <Text style={s.musicClear}>✕</Text>
                 </TouchableOpacity>
               ) : (
                 <Text style={s.musicChevron}>›</Text>
               )}
             </TouchableOpacity>
+
+            {/* Photos have no length of their own — pick which slice of the song plays. */}
+            {music && capture?.kind === "photo" ? (
+              <MusicTrimmer
+                trackId={music.id}
+                startMs={musicStart}
+                endMs={musicEnd}
+                onChange={(sMs, eMs) => {
+                  setMusicStart(sMs);
+                  setMusicEnd(eMs);
+                }}
+              />
+            ) : null}
 
             <View style={s.priceRow}>
               <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
@@ -463,7 +533,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         <MusicPicker
           visible={musicOpen}
           currentTrackId={music?.id ?? null}
-          onSelect={setMusic}
+          onSelect={selectMusic}
           onClose={() => setMusicOpen(false)}
         />
       </Modal>

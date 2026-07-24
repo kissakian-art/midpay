@@ -29,6 +29,13 @@
       "when": 1784884575268,
       "tag": "0003_wild_expediter",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1784893757110,
+      "tag": "0004_good_callisto",
+      "breakpoints": true
     }
   ]
 }

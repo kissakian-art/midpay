@@ -89,6 +89,7 @@ export interface FeedItem {
   overlays?: TextOverlay[] | null;
   musicTrackId?: string | null;
   musicStartMs?: number | null;
+  musicEndMs?: number | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */
@@ -200,6 +201,7 @@ export const createContent = (input: {
   overlays?: TextOverlay[];
   musicTrackId?: string;
   musicStartMs?: number;
+  musicEndMs?: number;
 }) => req<{ content: { id: string } }>("/content", { method: "POST", json: input });
 
 // --- Music ---

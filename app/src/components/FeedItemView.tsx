@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Image,
   PanResponder,
   Platform,
   Pressable,
@@ -86,85 +87,117 @@ export default function FeedItemView({
   const [following, setFollowing] = useState(false);
   const [likeCount, setLikeCount] = useState(item.likeCount);
 
-  // Playback controls (tap-to-pause + scrubber), video only.
+  // Playback controls (tap-to-pause + scrubber).
   const [paused, setPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
   const scrubbing = useRef(false);
   const seekTarget = useRef(0);
+  const lastVideoPos = useRef(0);
 
   const player = useVideoPlayer(null, (p) => {
     p.loop = true;
   });
 
   const isVideo = unlocked && item.kind === "video";
-
-  // A post can play its own music track OVER the media (composed at playback).
-  // When present, mute the original video audio and loop the track in sync.
-  const hasMusic = unlocked && item.kind !== "text" && !!item.musicTrackId;
+  // Music can back ANY post kind (video / photo / text) — composed at playback.
+  const hasMusic = unlocked && !!item.musicTrackId;
   const audio = useAudioPlayer(hasMusic ? { uri: musicAudioUrl(item.musicTrackId as string) } : null);
 
-  useEffect(() => {
-    if (!unlocked) return;
-    const source: VideoSource = { uri: mediaUrl(item.id), headers: authHeaders() };
-    player.replaceAsync(source).catch(() => {});
-  }, [unlocked, item.id, player]);
+  // Controls apply to anything playable: a video, OR a photo/text with music.
+  const hasControls = isVideo || hasMusic;
+
+  // Music segment [startSec, endSec). For photo/text the segment length is the
+  // post's play duration; for video the music is capped to the video length.
+  const startSec = (item.musicStartMs ?? 0) / 1000;
+  const endSec = item.musicEndMs != null ? item.musicEndMs / 1000 : null;
+  const segLen = endSec != null ? Math.max(0.1, endSec - startSec) : 0;
 
   useEffect(() => {
-    player.muted = hasMusic;
+    if (!unlocked || item.kind !== "video") return;
+    const source: VideoSource = { uri: mediaUrl(item.id), headers: authHeaders() };
+    player.replaceAsync(source).catch(() => {});
+  }, [unlocked, item.id, item.kind, player]);
+
+  useEffect(() => {
+    player.muted = hasMusic; // music replaces the original video audio
   }, [player, hasMusic]);
 
   const playing = active && unlocked && !paused;
 
   useEffect(() => {
+    if (!isVideo) return;
     if (playing) player.play();
     else player.pause();
-  }, [playing, player]);
+  }, [playing, isVideo, player]);
 
-  // A cell that scrolls off-screen should forget any manual pause so it
-  // autoplays fresh next time it becomes active.
+  // A cell that scrolls off-screen forgets any manual pause so it autoplays
+  // fresh next time it becomes active.
   useEffect(() => {
     if (!active) setPaused(false);
   }, [active]);
 
+  // Seek music to the segment start when the cell first becomes active.
+  useEffect(() => {
+    if (active && hasMusic) {
+      try {
+        audio.seekTo(startSec).catch(() => {});
+      } catch {
+        // not ready
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [active, hasMusic]);
+
   useEffect(() => {
     if (!hasMusic) return;
-    // expo-audio releases the player itself on unmount / when the source clears,
-    // so we never pause in cleanup (pausing a released player throws). All calls
-    // are guarded because the shared native object can be released underneath us
-    // as cells recycle during fast scrolling.
+    // expo-audio releases the player on unmount / source clear, so we never
+    // pause in cleanup; all calls are guarded since the shared native object can
+    // be released under us as cells recycle.
     try {
       audio.loop = true;
-      if (playing) {
-        const startSec = (item.musicStartMs ?? 0) / 1000;
-        if (startSec > 0) audio.seekTo(startSec).catch(() => {});
-        audio.play();
-      } else {
-        audio.pause();
-      }
+      if (playing) audio.play();
+      else audio.pause();
     } catch {
-      // player was already released — nothing to do
+      // already released
     }
-  }, [playing, hasMusic, audio, item.musicStartMs]);
+  }, [playing, hasMusic, audio]);
 
-  // Track playback position for the scrubber (active video only).
+  // Poll position for the scrubber and loop the music segment.
   useEffect(() => {
-    if (!isVideo || !active) return;
+    if (!hasControls || !active) return;
     const id = setInterval(() => {
       if (scrubbing.current) return;
       try {
-        if (player.duration) setDuration(player.duration);
-        setPosition(player.currentTime || 0);
+        if (isVideo) {
+          const cur = player.currentTime || 0;
+          // On each video loop restart the music so it never runs past the video.
+          if (hasMusic && cur + 0.4 < lastVideoPos.current) {
+            audio.seekTo(startSec).catch(() => {});
+          }
+          lastVideoPos.current = cur;
+          if (player.duration) setDuration(player.duration);
+          setPosition(cur);
+        } else if (hasMusic) {
+          const cur = audio.currentTime || 0;
+          if (endSec != null && cur >= endSec) {
+            audio.seekTo(startSec).catch(() => {});
+            setPosition(0);
+          } else {
+            setPosition(Math.max(0, cur - startSec));
+          }
+          setDuration(segLen || Math.max(0.1, (audio.duration || 0) - startSec));
+        }
       } catch {
-        // player not ready
+        // players not ready
       }
-    }, 300);
+    }, 250);
     return () => clearInterval(id);
-  }, [isVideo, active, player]);
+  }, [hasControls, active, isVideo, hasMusic, player, audio, startSec, endSec, segLen]);
 
   // Scrubber drag → seek. Latest-ref so the one-time PanResponder isn't stale.
-  const scrubState = useRef({ player, duration, width });
-  scrubState.current = { player, duration, width };
+  const scrubState = useRef({ player, audio, isVideo, hasMusic, startSec, duration, width });
+  scrubState.current = { player, audio, isVideo, hasMusic, startSec, duration, width };
   const scrub = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -175,8 +208,10 @@ export default function FeedItemView({
       },
       onPanResponderMove: (e) => scrubTo(scrubState.current, e.nativeEvent.pageX, seekTarget, setPosition),
       onPanResponderRelease: () => {
+        const st = scrubState.current;
         try {
-          scrubState.current.player.currentTime = seekTarget.current;
+          if (st.isVideo) st.player.currentTime = seekTarget.current;
+          else if (st.hasMusic) st.audio.seekTo(st.startSec + seekTarget.current).catch(() => {});
         } catch {
           // ignore
         }
@@ -257,6 +292,12 @@ export default function FeedItemView({
         <View style={s.textPost}>
           <Text style={s.textPostBody}>{item.description ?? item.title}</Text>
         </View>
+      ) : unlocked && item.kind === "photo" ? (
+        <Image
+          source={{ uri: mediaUrl(item.id), headers: authHeaders() }}
+          style={s.video}
+          resizeMode="cover"
+        />
       ) : unlocked ? (
         <VideoView player={player} style={s.video} contentFit="cover" nativeControls={false} />
       ) : (
@@ -275,8 +316,8 @@ export default function FeedItemView({
         </View>
       )}
 
-      {/* Tap anywhere on the video to pause/resume (and reveal the scrubber). */}
-      {isVideo ? (
+      {/* Tap to pause/resume (video or a photo/text with music) + reveal scrubber. */}
+      {hasControls ? (
         <Pressable style={StyleSheet.absoluteFill} onPress={() => setPaused((p) => !p)} />
       ) : null}
 
@@ -335,14 +376,14 @@ export default function FeedItemView({
       </View>
 
       {/* Big play glyph while paused. */}
-      {isVideo && paused ? (
+      {hasControls && paused ? (
         <View pointerEvents="none" style={s.playIconWrap}>
           <Text style={s.playIcon}>▶</Text>
         </View>
       ) : null}
 
       {/* Scrubber — appears on tap (while paused); drag to seek. */}
-      {isVideo && paused ? (
+      {hasControls && paused ? (
         <View style={s.scrubberWrap} {...scrub.panHandlers}>
           <Text style={s.scrubTime}>
             {mmss(position)} / {mmss(duration)}

@@ -172,6 +172,7 @@ contentRoutes.post("/", async (c) => {
     overlays: readOverlays(body),
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
+    musicEndMs: optionalInt(body, "musicEndMs"),
   });
   return c.json({ content: item }, 201);
 });
@@ -187,6 +188,7 @@ contentRoutes.patch("/:id", async (c) => {
     overlays: readOverlays(body),
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
+    musicEndMs: optionalInt(body, "musicEndMs"),
   });
   return c.json({ content: item });
 });
