@@ -145,6 +145,12 @@ adminRoutes.post("/live/:id/kill", ...mod, async (c) => {
 });
 
 // --- Creator management (§7.3) — Moderator + Super Admin ---
+// NOTE: /creators/lookup must be registered BEFORE /creators/:id, otherwise the
+// param route swallows "lookup" as an id.
+adminRoutes.get("/creators/lookup", ...mod, async (c) => {
+  return c.json(await c.get("container").creatorAdmin.lookup(c.req.query("q") ?? ""));
+});
+
 adminRoutes.get("/creators/:id", ...mod, async (c) => {
   return c.json({ creator: await c.get("container").creatorAdmin.get(requireParam(c, "id")) });
 });

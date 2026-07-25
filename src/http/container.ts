@@ -46,6 +46,7 @@ import { StorageService } from "../services/storage/storage.service";
  */
 export interface Container {
   db: Database;
+  config: ConfigService;
   users: UserRepository;
   creators: CreatorRepository;
   auth: AuthService;
@@ -110,7 +111,7 @@ export function createContainer(env: Env): Container {
   const payouts = new PayoutService(payoutRepo, wallets, creators, users, config, flw, audit);
   const adminAuth = new AdminAuthService(admins, audit, env);
   const moderation = new ModerationService(moderationRepo, contentRepo, entitlements, liveRepo, audit);
-  const creatorAdmin = new CreatorAdminService(creators, audit);
+  const creatorAdmin = new CreatorAdminService(creators, audit, users);
   const configAdmin = new ConfigAdminService(configRepo, audit, env);
   const analytics = new AnalyticsService(analyticsRepo, config);
   const social = new SocialService(socialRepo, users, contentRepo, creators);
@@ -122,6 +123,7 @@ export function createContainer(env: Env): Container {
 
   return {
     db,
+    config,
     users,
     creators,
     auth,

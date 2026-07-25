@@ -1,0 +1,578 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="robots" content="noindex" />
+<title>MidPay Admin Console</title>
+<style>
+  :root {
+    --bg: #0b0b0d; --panel: #16161a; --panel2: #1e1e24; --line: #2a2a31;
+    --text: #f4f4f5; --muted: #9a9aa5; --brand: #f5a623; --brand-ink: #1a1300;
+    --danger: #e5484d; --ok: #30a46c; --warn: #f5a623;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 15px/1.45 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+    background: var(--bg); color: var(--text); }
+  a { color: var(--brand); }
+  h1, h2, h3 { margin: 0 0 .5rem; font-weight: 600; }
+  input, select, button, textarea { font: inherit; }
+  input, select, textarea {
+    background: var(--panel2); border: 1px solid var(--line); color: var(--text);
+    border-radius: 8px; padding: .5rem .6rem; width: 100%; }
+  label { display: block; font-size: .8rem; color: var(--muted); margin: .5rem 0 .25rem; }
+  button {
+    background: var(--brand); color: var(--brand-ink); border: none; border-radius: 8px;
+    padding: .5rem .9rem; font-weight: 600; cursor: pointer; }
+  button.secondary { background: var(--panel2); color: var(--text); border: 1px solid var(--line); }
+  button.danger { background: var(--danger); color: #fff; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .row { display: flex; gap: .5rem; flex-wrap: wrap; align-items: end; }
+  .row > * { flex: 1 1 auto; }
+  .row > button { flex: 0 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+    padding: 1rem; margin-bottom: 1rem; }
+  .grid { display: grid; gap: .75rem; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+  .stat { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: .75rem; }
+  .stat .k { font-size: .75rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+  .stat .v { font-size: 1.3rem; font-weight: 700; margin-top: .2rem; }
+  table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+  th, td { text-align: left; padding: .5rem .5rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; font-size: .75rem; text-transform: uppercase; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .82rem; }
+  .pill { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .72rem; font-weight: 600; }
+  .pill.open, .pill.draft, .pill.new { background: #3a2f00; color: var(--brand); }
+  .pill.active, .pill.completed, .pill.approved, .pill.verified { background: #0e3a26; color: var(--ok); }
+  .pill.actioned, .pill.suspended, .pill.quarantined, .pill.executing { background: #3a2f00; color: var(--warn); }
+  .pill.dismissed, .pill.banned, .pill.failed, .pill.deleted { background: #3a1416; color: var(--danger); }
+  .muted { color: var(--muted); }
+  .err { color: var(--danger); }
+  .ok { color: var(--ok); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 1rem; }
+  .tableWrap { overflow-x: auto; }
+  /* header */
+  header.bar { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem;
+    border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 5; }
+  header.bar .brand { font-weight: 700; color: var(--brand); }
+  header.bar .spacer { flex: 1; }
+  nav.tabs { display: flex; gap: .25rem; flex-wrap: wrap; padding: .5rem 1rem; border-bottom: 1px solid var(--line);
+    background: var(--bg); position: sticky; top: 49px; z-index: 4; }
+  nav.tabs button { background: transparent; color: var(--muted); border: 1px solid transparent; }
+  nav.tabs button.on { background: var(--panel2); color: var(--text); border-color: var(--line); }
+  /* login */
+  .login { max-width: 360px; margin: 8vh auto; }
+  .hidden { display: none !important; }
+  .toast { position: fixed; bottom: 1rem; left: 50%; transform: translateX(-50%);
+    background: var(--panel2); border: 1px solid var(--line); padding: .6rem 1rem; border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0,0,0,.4); z-index: 20; max-width: 90vw; }
+  .actions { display: flex; gap: .35rem; flex-wrap: wrap; }
+  .actions button { padding: .3rem .55rem; font-size: .8rem; }
+  code.block { display: block; background: var(--panel2); border: 1px solid var(--line); border-radius: 8px;
+    padding: .5rem; word-break: break-all; margin: .35rem 0; }
+</style>
+</head>
+<body>
+
+<!-- ================= LOGIN ================= -->
+<div id="login" class="login">
+  <div class="card">
+    <h1 style="color:var(--brand)">MidPay Admin</h1>
+    <p class="muted" style="margin-top:0">Owner &amp; staff console. Separate from the app login.</p>
+    <label>Email</label>
+    <input id="li-email" type="email" autocomplete="username" placeholder="you@example.com" />
+    <label>Password</label>
+    <input id="li-pass" type="password" autocomplete="current-password" placeholder="••••••••" />
+    <div id="li-totp-wrap" class="hidden">
+      <label>Authenticator code (2FA)</label>
+      <input id="li-totp" inputmode="numeric" placeholder="123456" />
+    </div>
+    <div id="li-err" class="err" style="margin:.5rem 0"></div>
+    <button id="li-btn" style="width:100%">Log in</button>
+  </div>
+</div>
+
+<!-- ================= APP ================= -->
+<div id="app" class="hidden">
+  <header class="bar">
+    <span class="brand">MidPay Admin</span>
+    <span class="spacer"></span>
+    <span class="muted" id="who"></span>
+    <button class="ghost" id="logout">Log out</button>
+  </header>
+  <nav class="tabs" id="tabs"></nav>
+  <div class="wrap" id="view"></div>
+</div>
+
+<div id="toast" class="toast hidden"></div>
+
+<script>
+(function () {
+  "use strict";
+  var API = location.origin;
+  var TOKEN_KEY = "midpay_admin_token";
+  var ROLE_KEY = "midpay_admin_role";
+  var state = { token: localStorage.getItem(TOKEN_KEY) || null, role: localStorage.getItem(ROLE_KEY) || null, admin: null };
+
+  // ---------- helpers ----------
+  function $(id) { return document.getElementById(id); }
+  function el(html) { var t = document.createElement("template"); t.innerHTML = html.trim(); return t.content.firstChild; }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
+  function ugx(n) { return "UGX " + Number(n || 0).toLocaleString("en-US"); }
+  function shortId(s) { return s ? String(s).slice(0, 8) : ""; }
+  function when(s) { if (!s) return "—"; var d = new Date(s); return isNaN(d) ? String(s) : d.toLocaleString(); }
+  function pill(v) { return '<span class="pill ' + esc(v) + '">' + esc(v) + "</span>"; }
+
+  var toastTimer;
+  function toast(msg, isErr) {
+    var t = $("toast"); t.textContent = msg; t.className = "toast" + (isErr ? " err" : "");
+    clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.className = "toast hidden"; }, 3200);
+  }
+
+  function api(path, opts) {
+    opts = opts || {};
+    var headers = opts.headers || {};
+    if (state.token) headers["Authorization"] = "Bearer " + state.token;
+    if (opts.body != null && typeof opts.body !== "string") { headers["Content-Type"] = "application/json"; opts.body = JSON.stringify(opts.body); }
+    return fetch(API + path, { method: opts.method || "GET", headers: headers, body: opts.body }).then(function (r) {
+      return r.text().then(function (txt) {
+        var data; try { data = txt ? JSON.parse(txt) : {}; } catch (e) { data = { raw: txt }; }
+        if (!r.ok) { var msg = (data && (data.message || data.error)) || ("HTTP " + r.status); var err = new Error(msg); err.status = r.status; err.code = data && data.error; err.data = data; throw err; }
+        return data;
+      });
+    });
+  }
+
+  // ---------- auth ----------
+  function doLogin() {
+    var email = $("li-email").value.trim(), pass = $("li-pass").value, totp = $("li-totp").value.trim();
+    $("li-err").textContent = ""; $("li-btn").disabled = true;
+    var body = { email: email, password: pass }; if (totp) body.totpCode = totp;
+    api("/admin/auth/login", { method: "POST", body: body }).then(function (res) {
+      state.token = res.token; state.admin = res.admin; state.role = res.admin.role;
+      localStorage.setItem(TOKEN_KEY, res.token); localStorage.setItem(ROLE_KEY, res.admin.role);
+      showApp();
+    }).catch(function (e) {
+      if (e.code === "totp_required") { $("li-totp-wrap").classList.remove("hidden"); $("li-err").textContent = "Enter your authenticator code."; $("li-totp").focus(); }
+      else { $("li-err").textContent = e.message; }
+    }).finally(function () { $("li-btn").disabled = false; });
+  }
+
+  function logout() { state.token = null; state.role = null; state.admin = null;
+    localStorage.removeItem(TOKEN_KEY); localStorage.removeItem(ROLE_KEY);
+    $("app").classList.add("hidden"); $("login").classList.remove("hidden"); }
+
+  function onAuthError(e) { if (e && e.status === 401) { toast("Session expired — log in again", true); logout(); return true; } return false; }
+
+  // ---------- tabs / routing ----------
+  var TABS = [
+    { id: "dashboard", label: "Dashboard", render: renderDashboard },
+    { id: "moderation", label: "Moderation", render: renderModeration },
+    { id: "creators", label: "Creators", render: renderCreators },
+    { id: "config", label: "Config", render: renderConfig },
+    { id: "payouts", label: "Payouts", render: renderPayouts },
+    { id: "account", label: "Account", render: renderAccount }
+  ];
+  var current = "dashboard";
+
+  function showApp() {
+    $("login").classList.add("hidden"); $("app").classList.remove("hidden");
+    $("who").textContent = (state.admin ? state.admin.email + " · " : "") + (state.role || "");
+    var tabs = $("tabs"); tabs.innerHTML = "";
+    TABS.forEach(function (t) {
+      var b = el('<button data-tab="' + t.id + '">' + t.label + "</button>");
+      if (t.id === current) b.classList.add("on");
+      b.onclick = function () { current = t.id; go(); };
+      tabs.appendChild(b);
+    });
+    go();
+  }
+
+  function go() {
+    Array.prototype.forEach.call($("tabs").children, function (b) { b.classList.toggle("on", b.getAttribute("data-tab") === current); });
+    var tab = TABS.filter(function (t) { return t.id === current; })[0];
+    var view = $("view"); view.innerHTML = '<p class="muted">Loading…</p>';
+    try { tab.render(view); } catch (e) { view.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; }
+  }
+
+  function section(title, node) { var c = el('<div class="card"></div>'); if (title) c.appendChild(el("<h2>" + esc(title) + "</h2>")); if (node) c.appendChild(node); return c; }
+  function statGrid(pairs) { var g = el('<div class="grid"></div>'); pairs.forEach(function (p) {
+    g.appendChild(el('<div class="stat"><div class="k">' + esc(p[0]) + '</div><div class="v">' + p[1] + "</div></div>")); }); return g; }
+
+  // ---------- Dashboard ----------
+  function renderDashboard(view) {
+    view.innerHTML = "";
+    Promise.all([
+      api("/admin/analytics/self-funding").catch(function (e) { return { _e: e }; }),
+      api("/admin/analytics/revenue").catch(function (e) { return { _e: e }; }),
+      api("/admin/analytics/top").catch(function (e) { return { _e: e }; }),
+      api("/admin/payouts/float").catch(function (e) { return { _e: e }; })
+    ]).then(function (r) {
+      var sf = r[0], rev = r[1], top = r[2], flt = r[3];
+      if ([sf, rev, top, flt].some(function (x) { return x._e && onAuthError(x._e); })) return;
+      view.innerHTML = "";
+
+      if (!sf._e) {
+        var cov = sf.coveragePct;
+        view.appendChild(section("Self-funding", statGrid([
+          ["Coverage", '<span class="' + (cov >= 100 ? "ok" : "") + '">' + cov + "%</span>"],
+          ["Platform earnings", ugx(sf.platformEarningsUgx)],
+          ["Monthly target", ugx(sf.monthlyTargetUgx)]
+        ])));
+      }
+      if (!rev._e) {
+        var t = rev.totals;
+        view.appendChild(section("Revenue (all-time)", statGrid([
+          ["Paid sales", Number(t.count).toLocaleString()],
+          ["Gross", ugx(t.grossUgx)],
+          ["Flutterwave fees", ugx(t.feeUgx)],
+          ["Net pool", ugx(t.netPoolUgx)],
+          ["Creator share", ugx(t.creatorShareUgx)],
+          ["Platform share", ugx(t.platformShareUgx)]
+        ])));
+        if (rev.byType && rev.byType.length) {
+          var tb = el('<div class="tableWrap"><table><thead><tr><th>Type</th><th>Sales</th><th>Gross</th><th>Platform</th></tr></thead><tbody></tbody></table></div>');
+          var body = tb.querySelector("tbody");
+          rev.byType.forEach(function (b) { body.appendChild(el("<tr><td>" + esc(b.type) + "</td><td>" + Number(b.count).toLocaleString() + "</td><td>" + ugx(b.grossUgx) + "</td><td>" + ugx(b.platformShareUgx) + "</td></tr>")); });
+          view.appendChild(section("By content type", tb));
+        }
+      }
+      if (!flt._e) {
+        view.appendChild(section("Wallet float", statGrid([
+          ["Available", ugx(flt.availableUgx)],
+          ["Held", ugx(flt.heldUgx)],
+          ["Total obligation", ugx(flt.totalObligationUgx)]
+        ])));
+      }
+      if (!top._e && ((top.topCreators && top.topCreators.length) || (top.topContent && top.topContent.length))) {
+        var wrap = el("<div></div>");
+        if (top.topCreators && top.topCreators.length) {
+          var ct = el('<div class="tableWrap"><h3>Top creators</h3><table><thead><tr><th>Creator</th><th>Sales</th><th>Gross</th><th>Earned</th></tr></thead><tbody></tbody></table></div>');
+          top.topCreators.forEach(function (x) { ct.querySelector("tbody").appendChild(el('<tr><td class="mono">' + esc(shortId(x.creatorId)) + "</td><td>" + Number(x.salesCount).toLocaleString() + "</td><td>" + ugx(x.grossUgx) + "</td><td>" + ugx(x.creatorEarnedUgx) + "</td></tr>")); });
+          wrap.appendChild(ct);
+        }
+        if (top.topContent && top.topContent.length) {
+          var pt = el('<div class="tableWrap" style="margin-top:1rem"><h3>Top content</h3><table><thead><tr><th>Title</th><th>Purchases</th><th>ID</th></tr></thead><tbody></tbody></table></div>');
+          top.topContent.forEach(function (x) { pt.querySelector("tbody").appendChild(el("<tr><td>" + esc(x.title || "(untitled)") + "</td><td>" + Number(x.purchaseCount).toLocaleString() + '</td><td class="mono">' + esc(shortId(x.id)) + "</td></tr>")); });
+          wrap.appendChild(pt);
+        }
+        view.appendChild(section("Leaderboards", wrap));
+      }
+      var errs = [sf, rev, top, flt].filter(function (x) { return x._e; });
+      if (errs.length) view.appendChild(el('<p class="muted">Some panels need a finance/analyst role: ' + esc(errs.map(function (x) { return x._e.message; }).join("; ")) + "</p>"));
+    });
+  }
+
+  // ---------- Moderation ----------
+  function renderModeration(view) {
+    view.innerHTML = "";
+
+    // Reports queue
+    var queue = section("Report queue", null);
+    var ctrl = el('<div class="row"><div><label>Status filter</label><select id="mod-status"><option value="open">open</option><option value="reviewing">reviewing</option><option value="actioned">actioned</option><option value="dismissed">dismissed</option><option value="">all</option></select></div><button id="mod-refresh">Refresh</button></div>');
+    queue.appendChild(ctrl);
+    var listWrap = el('<div class="tableWrap" style="margin-top:.75rem"></div>');
+    queue.appendChild(listWrap);
+    view.appendChild(queue);
+
+    function loadReports() {
+      var st = $("mod-status").value;
+      listWrap.innerHTML = '<p class="muted">Loading…</p>';
+      api("/admin/moderation/reports" + (st ? "?status=" + st : "")).then(function (res) {
+        var reports = res.reports || [];
+        if (!reports.length) { listWrap.innerHTML = '<p class="muted">No reports.</p>'; return; }
+        var tbl = el('<table><thead><tr><th>When</th><th>Target</th><th>Reason</th><th>Status</th><th></th></tr></thead><tbody></tbody></table>');
+        var body = tbl.querySelector("tbody");
+        reports.forEach(function (rp) {
+          var tr = el("<tr><td>" + esc(when(rp.createdAt)) + '</td><td>' + esc(rp.targetType) + '<br><span class="mono">' + esc(shortId(rp.targetId)) + '</span></td><td>' + esc(rp.reason || "—") + "</td><td>" + pill(rp.status) + '</td><td class="actions"></td></tr>');
+          var act = tr.querySelector(".actions");
+          if (rp.status === "open" || rp.status === "reviewing") {
+            var a = el("<button>Actioned</button>"), d = el('<button class="secondary">Dismiss</button>');
+            a.onclick = function () { resolveReport(rp.id, "actioned"); };
+            d.onclick = function () { resolveReport(rp.id, "dismissed"); };
+            act.appendChild(a); act.appendChild(d);
+          } else { act.appendChild(el('<span class="muted">' + esc(when(rp.resolvedAt)) + "</span>")); }
+          body.appendChild(tr);
+        });
+        listWrap.innerHTML = ""; listWrap.appendChild(tbl);
+      }).catch(function (e) { if (!onAuthError(e)) listWrap.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+    }
+    function resolveReport(id, outcome) {
+      api("/admin/moderation/reports/" + id + "/resolve", { method: "POST", body: { outcome: outcome } })
+        .then(function () { toast("Report " + outcome); loadReports(); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    }
+    ctrl.querySelector("#mod-refresh").onclick = loadReports;
+    ctrl.querySelector("#mod-status").onchange = loadReports;
+    loadReports();
+
+    // Content takedown
+    var ct = el('<div class="row"><div><label>Content ID</label><input id="ct-id" placeholder="content uuid" /></div><div><label>Reason (optional)</label><input id="ct-reason" placeholder="why" /></div></div>');
+    var ctBtns = el('<div class="actions" style="margin-top:.6rem"><button class="secondary" id="ct-quar">Quarantine</button><button class="secondary" id="ct-rest">Restore</button><button class="danger" id="ct-rem">Remove (hard)</button></div>');
+    function contentAction(action) {
+      var id = $("ct-id").value.trim(); if (!id) return toast("Enter a content ID", true);
+      var reason = $("ct-reason").value.trim();
+      api("/admin/content/" + id + "/" + action, { method: "POST", body: { reason: reason } })
+        .then(function (r) { toast("Content " + (r.content ? r.content.status : action)); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    }
+    ctBtns.querySelector("#ct-quar").onclick = function () { contentAction("quarantine"); };
+    ctBtns.querySelector("#ct-rest").onclick = function () { contentAction("restore"); };
+    ctBtns.querySelector("#ct-rem").onclick = function () { if (confirm("Hard-remove this content? Media is deleted and buyer access revoked.")) contentAction("remove"); };
+    var ctSec = section("Content takedown", ct); ctSec.appendChild(ctBtns); view.appendChild(ctSec);
+
+    // Live kill
+    var lk = el('<div class="row"><div><label>Live event ID</label><input id="lk-id" placeholder="live uuid" /></div><div><label>Reason (optional)</label><input id="lk-reason" placeholder="why" /></div><button class="danger" id="lk-btn">Kill stream</button></div>');
+    lk.querySelector("#lk-btn").onclick = function () {
+      var id = $("lk-id").value.trim(); if (!id) return toast("Enter a live event ID", true);
+      if (!confirm("Immediately terminate this live stream?")) return;
+      api("/admin/live/" + id + "/kill", { method: "POST", body: { reason: $("lk-reason").value.trim() } })
+        .then(function () { toast("Stream terminated"); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    };
+    view.appendChild(section("Live kill-switch", lk));
+  }
+
+  // ---------- Creators ----------
+  function renderCreators(view) {
+    view.innerHTML = "";
+    var find = el('<div class="row"><div><label>Find by @handle or phone</label><input id="cr-q" placeholder="@username or 0770…" /></div><button id="cr-find">Find</button></div>');
+    var lookup = el('<div class="row" style="margin-top:.5rem"><div><label>…or by creator ID</label><input id="cr-id" placeholder="creator uuid" /></div><button class="secondary" id="cr-load">Load</button></div>');
+    var out = el("<div></div>");
+    var sec = section("Creator management", find); sec.appendChild(lookup); sec.appendChild(out); view.appendChild(sec);
+
+    // Render a creator card + moderation actions. `user` (optional) adds identity.
+    function showCreator(c, user) {
+      $("cr-id").value = c.id;
+      out.innerHTML = "";
+      if (user) {
+        out.appendChild(el('<p style="margin:.25rem 0"><strong>@' + esc(user.handle) + "</strong>" +
+          (user.displayName ? " · " + esc(user.displayName) : "") +
+          (user.phone ? ' · <span class="mono">' + esc(user.phone) + "</span>" : "") +
+          '<br><span class="mono muted">creator ' + esc(shortId(c.id)) + "</span></p>"));
+      }
+      out.appendChild(statGrid([
+        ["Status", pill(c.status)],
+        ["Standing", pill(c.standing)],
+        ["Verified", c.verified ? '<span class="ok">yes</span>' : "no"],
+        ["KYC", esc(c.kycStatus)],
+        ["Strikes", String(c.strikeCount)],
+        ["Payout", esc((c.payoutProvider || "—") + " " + (c.payoutMsisdn || ""))]
+      ]));
+      if (c.suspensionReason) out.appendChild(el('<p class="muted">Reason on file: ' + esc(c.suspensionReason) + "</p>"));
+      var reason = el('<div style="margin-top:.6rem"><label>Reason (for suspend/ban)</label><input id="cr-reason" placeholder="optional reason" /></div>');
+      out.appendChild(reason);
+      var acts = el('<div class="actions" style="margin-top:.6rem"></div>');
+      function act(label, cls, path, needConfirm) {
+        var b = el('<button class="' + cls + '">' + label + "</button>");
+        b.onclick = function () {
+          if (needConfirm && !confirm(label + " this creator?")) return;
+          api("/admin/creators/" + c.id + "/" + path, { method: "POST", body: { reason: $("cr-reason") ? $("cr-reason").value.trim() : "" } })
+            .then(function () { toast(label + " done"); load(); })
+            .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+        };
+        acts.appendChild(b);
+      }
+      act("Verify", "secondary", "verify", false);
+      act("Suspend", "secondary", "suspend", true);
+      act("Ban", "danger", "ban", true);
+      act("Reinstate", "secondary", "reinstate", false);
+      out.appendChild(acts);
+    }
+
+    function load() {
+      var id = $("cr-id").value.trim(); if (!id) return toast("Enter a creator ID", true);
+      out.innerHTML = '<p class="muted">Loading…</p>';
+      api("/admin/creators/" + id).then(function (res) { showCreator(res.creator, null); })
+        .catch(function (e) { if (!onAuthError(e)) out.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+    }
+
+    function find_() {
+      var q = $("cr-q").value.trim(); if (!q) return toast("Enter a @handle or phone", true);
+      out.innerHTML = '<p class="muted">Searching…</p>';
+      api("/admin/creators/lookup?q=" + encodeURIComponent(q)).then(function (res) {
+        if (res.creator) { showCreator(res.creator, res.user); return; }
+        var u = res.user;
+        out.innerHTML = "";
+        out.appendChild(el('<p><strong>@' + esc(u.handle) + "</strong>" + (u.displayName ? " · " + esc(u.displayName) : "") +
+          (u.phone ? ' · <span class="mono">' + esc(u.phone) + "</span>" : "") + "</p>"));
+        out.appendChild(el('<p class="muted">This account exists but has <strong>no creator profile</strong> yet ' +
+          "(they haven't tapped “Become a creator”). Creator moderation actions apply only once they've created a profile.</p>"));
+      }).catch(function (e) { if (!onAuthError(e)) out.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+    }
+
+    find.querySelector("#cr-find").onclick = find_;
+    lookup.querySelector("#cr-load").onclick = load;
+    $("cr-q").addEventListener("keydown", function (e) { if (e.key === "Enter") find_(); });
+    $("cr-id").addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
+  }
+
+  // ---------- Config ----------
+  function renderConfig(view) {
+    view.innerHTML = "";
+    api("/admin/config").then(function (res) {
+      var cfg = res.config || [];
+      view.innerHTML = "";
+      var tbl = el('<div class="tableWrap"><table><thead><tr><th>Key</th><th>Value</th><th>Source</th><th>Effective</th><th></th></tr></thead><tbody></tbody></table></div>');
+      var body = tbl.querySelector("tbody");
+      cfg.forEach(function (row) {
+        var tr = el("<tr></tr>");
+        tr.appendChild(el("<td><strong>" + esc(row.label) + '</strong><br><span class="mono muted">' + esc(row.key) + "</span></td>"));
+        var valTd = el("<td></td>"); var input = el('<input value="' + esc(row.value) + '" style="max-width:140px" />'); valTd.appendChild(input); tr.appendChild(valTd);
+        tr.appendChild(el("<td>" + (row.source === "db" ? pill("active") : '<span class="muted">default</span>') + "</td>"));
+        tr.appendChild(el('<td class="muted">' + esc(when(row.effectiveFrom)) + "</td>"));
+        var actTd = el('<td class="actions"></td>');
+        var save = el("<button>Save</button>");
+        save.onclick = function () {
+          var v = input.value.trim();
+          api("/admin/config/" + encodeURIComponent(row.key), { method: "PUT", body: { value: isNaN(Number(v)) ? v : Number(v) } })
+            .then(function () { toast("Saved " + row.key); renderConfig(view); })
+            .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+        };
+        var hist = el('<button class="ghost">History</button>');
+        hist.onclick = function () { showHistory(row.key); };
+        actTd.appendChild(save); actTd.appendChild(hist); tr.appendChild(actTd);
+        body.appendChild(tr);
+      });
+      view.appendChild(section("Platform config", tbl));
+      view.appendChild(el('<p class="muted">Editing requires the Super Admin role. Amounts are whole UGX; percentages are plain numbers (e.g. 3 = 3%).</p>'));
+      var histWrap = el('<div id="cfg-hist"></div>'); view.appendChild(histWrap);
+    }).catch(function (e) { if (!onAuthError(e)) view.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+
+    function showHistory(key) {
+      api("/admin/config/" + encodeURIComponent(key) + "/history").then(function (res) {
+        var rows = res.history || [];
+        var w = $("cfg-hist"); w.innerHTML = "";
+        var tbl = el('<div class="tableWrap"><table><thead><tr><th>Value</th><th>Effective from</th><th>Set by</th></tr></thead><tbody></tbody></table></div>');
+        if (!rows.length) tbl.querySelector("tbody").appendChild(el('<tr><td colspan="3" class="muted">No overrides yet (using default).</td></tr>'));
+        rows.forEach(function (h) { tbl.querySelector("tbody").appendChild(el("<tr><td>" + esc(h.valueJson != null ? h.valueJson : h.value) + "</td><td>" + esc(when(h.effectiveFrom)) + '</td><td class="mono">' + esc(shortId(h.createdByAdminId)) + "</td></tr>")); });
+        w.appendChild(section("History · " + key, tbl));
+      }).catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    }
+  }
+
+  // ---------- Payouts ----------
+  function renderPayouts(view) {
+    view.innerHTML = "";
+    var floatSec = section("Wallet float", el('<p class="muted">Loading…</p>')); view.appendChild(floatSec);
+    api("/admin/payouts/float").then(function (f) {
+      floatSec.innerHTML = "<h2>Wallet float</h2>";
+      floatSec.appendChild(statGrid([["Available", ugx(f.availableUgx)], ["Held", ugx(f.heldUgx)], ["Total obligation", ugx(f.totalObligationUgx)]]));
+    }).catch(function (e) { if (!onAuthError(e)) floatSec.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+
+    var build = el('<div class="row"><div><label>Min payout threshold UGX (optional)</label><input id="pb-min" inputmode="numeric" placeholder="0" /></div><button id="pb-btn">Build draft batch</button></div>');
+    build.querySelector("#pb-btn").onclick = function () {
+      var v = $("pb-min").value.trim(); var body = {}; if (v) body.minPayoutThresholdUgx = Number(v);
+      $("pb-btn").disabled = true;
+      api("/admin/payouts/batches", { method: "POST", body: body })
+        .then(function () { toast("Draft batch built"); loadBatches(); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); })
+        .finally(function () { $("pb-btn").disabled = false; });
+    };
+    view.appendChild(section("Build a batch", build));
+
+    var listWrap = el('<div class="tableWrap"></div>');
+    view.appendChild(section("Batches", listWrap));
+    var detail = el("<div></div>"); view.appendChild(detail);
+
+    function loadBatches() {
+      listWrap.innerHTML = '<p class="muted">Loading…</p>';
+      api("/admin/payouts/batches").then(function (res) {
+        var batches = res.batches || [];
+        if (!batches.length) { listWrap.innerHTML = '<p class="muted">No batches yet.</p>'; return; }
+        var tbl = el('<table><thead><tr><th>Created</th><th>Status</th><th>Total</th><th>Payouts</th><th></th></tr></thead><tbody></tbody></table>');
+        var body = tbl.querySelector("tbody");
+        batches.forEach(function (b) {
+          var tr = el("<tr><td>" + esc(when(b.createdAt)) + "</td><td>" + pill(b.status) + "</td><td>" + ugx(b.totalAmountUgx) + "</td><td>" + b.payoutCount + '</td><td class="actions"></td></tr>');
+          var act = tr.querySelector(".actions");
+          var v = el('<button class="ghost">View</button>'); v.onclick = function () { viewBatch(b.id); }; act.appendChild(v);
+          if (b.status === "draft") { var ap = el("<button>Approve</button>"); ap.onclick = function () { batchAction(b.id, "approve", "Approve this batch?"); }; act.appendChild(ap); }
+          if (b.status === "approved") { var ex = el('<button class="danger">Execute</button>'); ex.onclick = function () { batchAction(b.id, "execute", "Execute payouts now? This sends money."); }; act.appendChild(ex); }
+          body.appendChild(tr);
+        });
+        listWrap.innerHTML = ""; listWrap.appendChild(tbl);
+      }).catch(function (e) { if (!onAuthError(e)) listWrap.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+    }
+    function batchAction(id, action, confirmMsg) {
+      if (!confirm(confirmMsg)) return;
+      api("/admin/payouts/batches/" + id + "/" + action, { method: "POST" })
+        .then(function () { toast("Batch " + action + "d"); loadBatches(); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    }
+    function viewBatch(id) {
+      detail.innerHTML = '<p class="muted">Loading batch…</p>';
+      api("/admin/payouts/batches/" + id).then(function (res) {
+        var b = res.batch || res; var payouts = res.payouts || [];
+        detail.innerHTML = "";
+        var head = statGrid([["Status", pill(b.status)], ["Total", ugx(b.totalAmountUgx)], ["Payouts", String(b.payoutCount)], ["Threshold", ugx(b.minPayoutThresholdUgx)]]);
+        var sec = section("Batch " + shortId(id), head);
+        if (payouts.length) {
+          var tbl = el('<div class="tableWrap" style="margin-top:.75rem"><table><thead><tr><th>Creator</th><th>Gross</th><th>Duty</th><th>Net</th><th>To</th><th>Status</th></tr></thead><tbody></tbody></table></div>');
+          payouts.forEach(function (p) { tbl.querySelector("tbody").appendChild(el('<tr><td class="mono">' + esc(shortId(p.creatorId)) + "</td><td>" + ugx(p.grossUgx) + "</td><td>" + ugx(p.withdrawalDutyUgx) + "</td><td>" + ugx(p.netUgx) + "</td><td>" + esc((p.payoutProvider || "") + " " + (p.payoutMsisdn || "")) + "</td><td>" + pill(p.status) + "</td></tr>")); });
+          sec.appendChild(tbl);
+        }
+        detail.appendChild(sec);
+      }).catch(function (e) { if (!onAuthError(e)) detail.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
+    }
+    loadBatches();
+  }
+
+  // ---------- Account ----------
+  function renderAccount(view) {
+    view.innerHTML = "";
+
+    var pw = el('<div><label>Current password</label><input id="ac-cur" type="password" /><label>New password</label><input id="ac-new" type="password" /><button id="ac-btn" style="margin-top:.6rem">Change password</button></div>');
+    pw.querySelector("#ac-btn").onclick = function () {
+      api("/admin/auth/change-password", { method: "POST", body: { currentPassword: $("ac-cur").value, newPassword: $("ac-new").value } })
+        .then(function () { toast("Password changed"); $("ac-cur").value = ""; $("ac-new").value = ""; })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    };
+    view.appendChild(section("Change password", pw));
+
+    var tfa = el("<div></div>");
+    var setupBtn = el("<button>Set up 2FA</button>");
+    setupBtn.onclick = function () {
+      api("/admin/2fa/setup", { method: "POST" }).then(function (res) {
+        tfa.innerHTML = "";
+        tfa.appendChild(el("<p>Add this secret to your authenticator app (manual entry), then enter a live code to enable.</p>"));
+        tfa.appendChild(el('<code class="block">Secret: ' + esc(res.secret) + "</code>"));
+        tfa.appendChild(el('<code class="block">' + esc(res.otpauth) + "</code>"));
+        var row = el('<div class="row" style="margin-top:.5rem"><div><label>Code from app</label><input id="tfa-code" inputmode="numeric" placeholder="123456" /></div><button id="tfa-enable">Enable 2FA</button></div>');
+        row.querySelector("#tfa-enable").onclick = function () {
+          api("/admin/2fa/enable", { method: "POST", body: { code: $("tfa-code").value.trim() } })
+            .then(function () { toast("2FA enabled"); renderAccount(view); })
+            .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+        };
+        tfa.appendChild(row);
+      }).catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    };
+    var disableRow = el('<div class="row"><div><label>Code from app</label><input id="tfa-dcode" inputmode="numeric" placeholder="123456" /></div><button class="danger" id="tfa-disable">Disable 2FA</button></div>');
+    disableRow.querySelector("#tfa-disable").onclick = function () {
+      api("/admin/2fa/disable", { method: "POST", body: { code: $("tfa-dcode").value.trim() } })
+        .then(function () { toast("2FA disabled"); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+    };
+    var tfaSec = section("Two-factor authentication (TOTP)", tfa);
+    tfaSec.appendChild(setupBtn);
+    tfaSec.appendChild(el('<p class="muted" style="margin-top:1rem">Already enabled? Disable it here:</p>'));
+    tfaSec.appendChild(disableRow);
+    view.appendChild(tfaSec);
+  }
+
+  // ---------- boot ----------
+  $("li-btn").onclick = doLogin;
+  $("li-pass").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+  $("li-totp").addEventListener("keydown", function (e) { if (e.key === "Enter") doLogin(); });
+  $("logout").onclick = logout;
+
+  if (state.token) {
+    // Validate the stored token; fall back to login on 401.
+    api("/admin/me").then(function (res) { state.admin = res.admin; state.role = res.admin.role;
+      localStorage.setItem(ROLE_KEY, res.admin.role); showApp(); })
+      .catch(function () { logout(); });
+  }
+})();
+</script>
+</body>
+</html>

@@ -4,6 +4,12 @@ main = "src/index.ts"
 compatibility_date = "2025-07-01"
 compatibility_flags = ["nodejs_compat"]
 
+# Import *.html files as text strings (used to serve the admin console page).
+[[rules]]
+type = "Text"
+globs = ["**/*.html"]
+fallthrough = true
+
 # --- D1: primary datastore (§2.4). Core relational state + financial ledger only. ---
 # Run `wrangler d1 create midpay` and paste the returned database_id below.
 [[d1_databases]]
@@ -49,6 +55,12 @@ STREAMING_COST_PER_VIEWER_MINUTE = "15"
 RECORDED_PRICE_FLOOR = "5000"
 LIVE_AUTO_TERMINATE_GRACE_MINUTES = "5"
 CLIP_MAX_LENGTH_SECONDS = "300"
+# Total minutes of FREE video a creator may post (§4.5.3). Paid videos are
+# unlimited. Storage/bandwidth budget guard for launch; owner-tunable.
+FREE_CONTENT_MINUTES = "100"
+# Paid PHOTO price floor (UGX). Lower than video (RECORDED_PRICE_FLOOR) — a photo
+# is a lower-value, near-zero-cost item, so a lower floor lifts impulse buys.
+PHOTO_PRICE_FLOOR = "2000"
 FLUTTERWAVE_FEE_PERCENT = "3"
 MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT = "0.5"
 # Minimum available balance (UGX) for a creator to be included in a payout batch

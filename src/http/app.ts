@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { sql } from "drizzle-orm";
 import { AuthError } from "../services/auth.service";
 import { ApiError } from "../services/errors";
+import consoleHtml from "./console.html";
 import { createContainer } from "./container";
 import { adminRoutes } from "./routes/admin.routes";
 import { authRoutes } from "./routes/auth.routes";
@@ -29,6 +30,10 @@ export function createApp(): Hono<AppEnv> {
     c.set("container", createContainer(c.env));
     await next();
   });
+
+  // Admin web console — a self-contained single-page app (email+password+TOTP
+  // login, then drives the /admin/* API). Static page; the API enforces auth.
+  app.get("/console", (c) => c.html(consoleHtml));
 
   app.get("/health", async (c) => {
     try {
