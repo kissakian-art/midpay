@@ -20,6 +20,8 @@ export const CONFIG_KEYS: ConfigKeyDef[] = [
   { key: "STREAMING_COST_PER_VIEWER_MINUTE", envVar: "STREAMING_COST_PER_VIEWER_MINUTE", kind: "int", label: "Streaming cost per viewer-minute (UGX)" },
   { key: "RECORDED_PRICE_FLOOR", envVar: "RECORDED_PRICE_FLOOR", kind: "int", label: "Recorded price floor (UGX)" },
   { key: "CLIP_MAX_LENGTH_SECONDS", envVar: "CLIP_MAX_LENGTH_SECONDS", kind: "int", label: "Clip max length (seconds)" },
+  { key: "FREE_CONTENT_MINUTES", envVar: "FREE_CONTENT_MINUTES", kind: "int", label: "Free video allowance per creator (minutes)" },
+  { key: "PHOTO_PRICE_FLOOR", envVar: "PHOTO_PRICE_FLOOR", kind: "int", label: "Paid photo price floor (UGX)" },
   { key: "LIVE_AUTO_TERMINATE_GRACE_MINUTES", envVar: "LIVE_AUTO_TERMINATE_GRACE_MINUTES", kind: "int", label: "Live auto-terminate grace (minutes)" },
   { key: "FLUTTERWAVE_FEE_PERCENT", envVar: "FLUTTERWAVE_FEE_PERCENT", kind: "percent", label: "Flutterwave fee (%)" },
   { key: "MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT", envVar: "MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT", kind: "percent", label: "Withdrawal duty (%)" },

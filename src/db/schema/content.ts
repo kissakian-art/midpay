@@ -66,6 +66,9 @@ export const content = sqliteTable(
     // playback); for photo/text posts the segment length IS the post duration.
     musicStartMs: integer("music_start_ms"),
     musicEndMs: integer("music_end_ms"),
+    // Music playback loudness, 0..100 (§ compose-at-playback). NULL = full (100).
+    // Lets a tutorial duck background music under the clip's own narration.
+    musicVolume: integer("music_volume"),
 
     // Media pointers — R2 only (§2.2).
     r2Key: text("r2_key"), // encoded media object

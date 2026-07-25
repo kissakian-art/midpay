@@ -64,6 +64,13 @@
       "when": 1784952337798,
       "tag": "0008_yellow_surge",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1784979712394,
+      "tag": "0009_cheerful_menace",
+      "breakpoints": true
     }
   ]
 }

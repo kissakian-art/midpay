@@ -49,6 +49,16 @@ export class ConfigService {
     return this.getNumber("CLIP_MAX_LENGTH_SECONDS", this.env.CLIP_MAX_LENGTH_SECONDS);
   }
 
+  /** Total minutes of FREE video allowed per creator (§4.5.3). Paid is unlimited. */
+  freeContentMinutes(): Promise<number> {
+    return this.getNumber("FREE_CONTENT_MINUTES", this.env.FREE_CONTENT_MINUTES);
+  }
+
+  /** Paid price floor for PHOTOS (§3.2). Videos/text use recordedPriceFloor. */
+  photoPriceFloor(): Promise<number> {
+    return this.getNumber("PHOTO_PRICE_FLOOR", this.env.PHOTO_PRICE_FLOOR);
+  }
+
   /** Default minimum payout threshold, UGX (§7.5). Overridable per batch. */
   minPayoutThresholdUgx(): Promise<number> {
     return this.getNumber("MIN_PAYOUT_THRESHOLD_UGX", this.env.MIN_PAYOUT_THRESHOLD_UGX);

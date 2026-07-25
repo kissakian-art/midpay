@@ -6,6 +6,23 @@ import { optionalInt, optionalString, readJson } from "../util";
 
 export const contentRoutes = new Hono<AppEnv>();
 
+/** Read + clamp the music volume field (0..100), or undefined if absent. */
+function readMusicVolume(body: Record<string, unknown>): number | undefined {
+  const v = optionalInt(body, "musicVolume");
+  return v == null ? undefined : Math.max(0, Math.min(100, v));
+}
+
+// Public — the paid-content price floors so the app can show the right minimum
+// (photos have a lower floor than videos). Values are owner-tunable (§7.2).
+contentRoutes.get("/pricing", async (c) => {
+  const config = c.get("container").config;
+  const [pricing, photoFloor] = await Promise.all([
+    config.pricingConfig(),
+    config.photoPriceFloor(),
+  ]);
+  return c.json({ recordedFloor: pricing.recordedPriceFloor, photoFloor });
+});
+
 // Public — the global feed (newest published first). ?limit=20&before=<unixSec>
 // A valid bearer token (optional) decorates paid items with `owned`.
 contentRoutes.get("/feed", async (c) => {
@@ -221,6 +238,7 @@ contentRoutes.post("/", async (c) => {
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
     musicEndMs: optionalInt(body, "musicEndMs"),
+    musicVolume: readMusicVolume(body),
   });
   return c.json({ content: item }, 201);
 });
@@ -238,6 +256,7 @@ contentRoutes.patch("/:id", async (c) => {
     musicTrackId: optionalString(body, "musicTrackId"),
     musicStartMs: optionalInt(body, "musicStartMs"),
     musicEndMs: optionalInt(body, "musicEndMs"),
+    musicVolume: readMusicVolume(body),
   });
   return c.json({ content: item });
 });

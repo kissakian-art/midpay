@@ -88,6 +88,7 @@ export class SearchRepository {
         musicTrackId: content.musicTrackId,
         musicStartMs: content.musicStartMs,
         musicEndMs: content.musicEndMs,
+        musicVolume: content.musicVolume,
         r2Key: content.r2Key,
         thumbnailR2Key: content.thumbnailR2Key,
         durationSeconds: content.durationSeconds,

@@ -1,4 +1,4 @@
-import { and, desc, eq, lt, sql } from "drizzle-orm";
+import { and, desc, eq, lt, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { content, creators, users, type Content, type NewContent } from "../db/schema";
 
@@ -54,6 +54,7 @@ export class ContentRepository {
         musicTrackId: content.musicTrackId,
         musicStartMs: content.musicStartMs,
         musicEndMs: content.musicEndMs,
+        musicVolume: content.musicVolume,
         r2Key: content.r2Key,
         thumbnailR2Key: content.thumbnailR2Key,
         durationSeconds: content.durationSeconds,
@@ -83,6 +84,26 @@ export class ContentRepository {
 
   update(id: string, patch: Partial<Content>): Promise<Content> {
     return this.db.update(content).set(patch).where(eq(content.id, id)).returning().get();
+  }
+
+  /**
+   * Total seconds of a creator's FREE, non-deleted content (§4.5.3 allowance).
+   * Photos/text have NULL duration and contribute 0, so this is effectively the
+   * creator's free-video minutes used.
+   */
+  async sumFreeVideoSeconds(creatorId: string): Promise<number> {
+    const row = await this.db
+      .select({ total: sql<number>`coalesce(sum(${content.durationSeconds}), 0)` })
+      .from(content)
+      .where(
+        and(
+          eq(content.creatorId, creatorId),
+          eq(content.pricing, "free"),
+          ne(content.status, "deleted"),
+        ),
+      )
+      .get();
+    return row?.total ?? 0;
   }
 
   setStatus(
@@ -125,6 +146,7 @@ export class ContentRepository {
         musicTrackId: content.musicTrackId,
         musicStartMs: content.musicStartMs,
         musicEndMs: content.musicEndMs,
+        musicVolume: content.musicVolume,
         r2Key: content.r2Key,
         thumbnailR2Key: content.thumbnailR2Key,
         durationSeconds: content.durationSeconds,
@@ -167,6 +189,7 @@ export class ContentRepository {
         musicTrackId: content.musicTrackId,
         musicStartMs: content.musicStartMs,
         musicEndMs: content.musicEndMs,
+        musicVolume: content.musicVolume,
         r2Key: content.r2Key,
         thumbnailR2Key: content.thumbnailR2Key,
         durationSeconds: content.durationSeconds,

@@ -32,6 +32,11 @@ export interface Env {
   RECORDED_PRICE_FLOOR: string;
   LIVE_AUTO_TERMINATE_GRACE_MINUTES: string;
   CLIP_MAX_LENGTH_SECONDS: string;
+  // Total minutes of FREE video a creator may post (§4.5.3). Paid is unlimited.
+  FREE_CONTENT_MINUTES: string;
+  // Recorded price floor for PHOTOS (§3.2). Lower than video since a photo is a
+  // lower-value item and near-zero to store/serve. Videos use RECORDED_PRICE_FLOOR.
+  PHOTO_PRICE_FLOOR: string;
   FLUTTERWAVE_FEE_PERCENT: string;
   MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT: string;
   MIN_PAYOUT_THRESHOLD_UGX: string;

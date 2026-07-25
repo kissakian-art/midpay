@@ -22,6 +22,7 @@ export interface CreateContentInput {
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
+  musicVolume?: number | null; // 0..100, playback loudness of the music
 }
 
 export interface UpdateContentInput {
@@ -34,6 +35,7 @@ export interface UpdateContentInput {
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
+  musicVolume?: number | null;
 }
 
 /**
@@ -86,7 +88,10 @@ export class ContentService {
 
     let priceUgx: number | null = null;
     if (pricing === "paid") {
-      priceUgx = await this.validatePaidPrice(input.priceUgx);
+      priceUgx = await this.validatePaidPrice(input.priceUgx, input.kind ?? "video");
+    } else if (input.durationSeconds != null) {
+      // Free video → counts against the creator's free-minutes allowance.
+      await this.assertFreeMinutesAllows(creatorId, input.durationSeconds);
     }
 
     return this.content.create({
@@ -105,16 +110,54 @@ export class ContentService {
       musicTrackId: input.musicTrackId ?? null,
       musicStartMs: input.musicStartMs ?? null,
       musicEndMs: input.musicEndMs ?? null,
+      musicVolume: input.musicVolume ?? null,
       status: "draft",
     });
   }
 
-  private async validatePaidPrice(priceUgx: number | undefined): Promise<number> {
+  /**
+   * §4.5.3 free-video allowance: a creator's total FREE video minutes are
+   * capped (paid videos are unlimited). Throws if adding `addSeconds` of free
+   * video would exceed the cap. Photos/text (no duration) never consume it.
+   */
+  private async assertFreeMinutesAllows(creatorId: string, addSeconds: number): Promise<void> {
+    if (!addSeconds || addSeconds <= 0) return;
+    const limitMin = await this.config.freeContentMinutes();
+    if (limitMin <= 0) return; // 0 = disabled (unlimited free)
+    const limitSec = limitMin * 60;
+    const usedSec = await this.content.sumFreeVideoSeconds(creatorId);
+    if (usedSec + addSeconds > limitSec) {
+      throw unprocessable(
+        "free_minutes_exhausted",
+        `Free videos are capped at ${limitMin} minutes per creator (you've used ${Math.round(
+          usedSec / 60,
+        )} min). Make this a paid video, or remove some free ones.`,
+        {
+          limitMinutes: limitMin,
+          usedSeconds: usedSec,
+          remainingSeconds: Math.max(0, limitSec - usedSec),
+          addSeconds,
+        },
+      );
+    }
+  }
+
+  /** Paid price floor for a content kind — photos get their own lower floor. */
+  private async priceFloorFor(kind: "video" | "photo" | "text"): Promise<number> {
+    if (kind === "photo") return this.config.photoPriceFloor();
+    const cfg = await this.config.pricingConfig();
+    return cfg.recordedPriceFloor;
+  }
+
+  private async validatePaidPrice(
+    priceUgx: number | undefined,
+    kind: "video" | "photo" | "text",
+  ): Promise<number> {
     if (priceUgx == null || !Number.isInteger(priceUgx)) {
       throw badRequest("price_required", "Paid content needs an integer priceUgx");
     }
-    const cfg = await this.config.pricingConfig();
-    const check = validateRecordedPrice(priceUgx, cfg);
+    const floor = await this.priceFloorFor(kind);
+    const check = validateRecordedPrice(priceUgx, { recordedPriceFloor: floor });
     if (!check.ok) {
       throw unprocessable(
         "below_price_floor",
@@ -140,6 +183,7 @@ export class ContentService {
     if (input.musicTrackId !== undefined) patch.musicTrackId = input.musicTrackId;
     if (input.musicStartMs !== undefined) patch.musicStartMs = input.musicStartMs;
     if (input.musicEndMs !== undefined) patch.musicEndMs = input.musicEndMs;
+    if (input.musicVolume !== undefined) patch.musicVolume = input.musicVolume;
 
     // Pricing status change (§4.5.1). Note: already-distributed copies are not
     // recalled (free→paid) and existing buyers keep access (paid→free); the app
@@ -147,8 +191,15 @@ export class ContentService {
     const nextPricing = input.pricing ?? item.pricing;
     if (nextPricing === "paid") {
       patch.pricing = "paid";
-      patch.priceUgx = await this.validatePaidPrice(input.priceUgx ?? item.priceUgx ?? undefined);
+      patch.priceUgx = await this.validatePaidPrice(
+        input.priceUgx ?? item.priceUgx ?? undefined,
+        item.kind,
+      );
     } else if (nextPricing === "free") {
+      // Flipping a paid video to free consumes the free-minutes allowance.
+      if (item.pricing !== "free" && item.durationSeconds != null) {
+        await this.assertFreeMinutesAllows(item.creatorId, item.durationSeconds);
+      }
       patch.pricing = "free";
       patch.priceUgx = null;
     }
