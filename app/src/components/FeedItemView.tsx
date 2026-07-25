@@ -1,3 +1,4 @@
+import { useIsFocused } from "@react-navigation/native";
 import { useAudioPlayer } from "expo-audio";
 import * as ScreenCapture from "expo-screen-capture";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
@@ -5,6 +6,7 @@ import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  AppState,
   Image,
   PanResponder,
   Platform,
@@ -82,6 +84,16 @@ export default function FeedItemView({
   const { user } = useAuth();
   const { width } = useWindowDimensions();
   const isSelf = user?.id === item.creatorUserId;
+
+  // Playback must stop when the Feed/PostViewer screen is navigated away from
+  // (tab switch OR a screen pushed on top) or the app is backgrounded — not just
+  // when the cell scrolls off. Without this the music kept playing off-screen.
+  const isFocused = useIsFocused();
+  const [appActive, setAppActive] = useState(AppState.currentState === "active");
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (st) => setAppActive(st === "active"));
+    return () => sub.remove();
+  }, []);
   const [unlocked, setUnlocked] = useState(item.pricing === "free" || item.owned);
   const [buying, setBuying] = useState(false);
   const [liked, setLiked] = useState(false);
@@ -92,6 +104,7 @@ export default function FeedItemView({
   const [paused, setPaused] = useState(false);
   const [duration, setDuration] = useState(0);
   const [position, setPosition] = useState(0);
+  const [seeking, setSeeking] = useState(false); // finger down on the scrubber
   const scrubbing = useRef(false);
   const seekTarget = useRef(0);
   const lastVideoPos = useRef(0);
@@ -113,6 +126,8 @@ export default function FeedItemView({
   const startSec = (item.musicStartMs ?? 0) / 1000;
   const endSec = item.musicEndMs != null ? item.musicEndMs / 1000 : null;
   const segLen = endSec != null ? Math.max(0.1, endSec - startSec) : 0;
+  // Music loudness 0..1 (NULL = full). Lets tutorials duck music under narration.
+  const musicVol = Math.max(0, Math.min(1, (item.musicVolume ?? 100) / 100));
 
   useEffect(() => {
     if (!unlocked || item.kind !== "video") return;
@@ -120,11 +135,25 @@ export default function FeedItemView({
     player.replaceAsync(source).catch(() => {});
   }, [unlocked, item.id, item.kind, player]);
 
+  // Keep the clip's OWN audio (narration) audible; the music is layered under it
+  // at the creator-set volume rather than replacing it, so tutorials work.
   useEffect(() => {
-    player.muted = hasMusic; // music replaces the original video audio
-  }, [player, hasMusic]);
+    player.muted = false;
+  }, [player]);
 
-  const playing = active && unlocked && !paused;
+  useEffect(() => {
+    if (!hasMusic) return;
+    try {
+      audio.volume = musicVol;
+    } catch {
+      // player released
+    }
+  }, [audio, hasMusic, musicVol]);
+
+  // On screen = the active cell AND the screen is focused AND the app is in the
+  // foreground. This is what actually gates audio/video playback.
+  const onScreen = active && isFocused && appActive;
+  const playing = onScreen && unlocked && !paused;
 
   useEffect(() => {
     if (!isVideo) return;
@@ -166,7 +195,7 @@ export default function FeedItemView({
 
   // Poll position for the scrubber and loop the music segment.
   useEffect(() => {
-    if (!hasControls || !active) return;
+    if (!hasControls || !onScreen) return;
     const id = setInterval(() => {
       if (scrubbing.current) return;
       try {
@@ -194,29 +223,46 @@ export default function FeedItemView({
       }
     }, 250);
     return () => clearInterval(id);
-  }, [hasControls, active, isVideo, hasMusic, player, audio, startSec, endSec, segLen]);
+  }, [hasControls, onScreen, isVideo, hasMusic, player, audio, startSec, endSec, segLen]);
 
   // Scrubber drag → seek. Latest-ref so the one-time PanResponder isn't stale.
-  const scrubState = useRef({ player, audio, isVideo, hasMusic, startSec, duration, width });
-  scrubState.current = { player, audio, isVideo, hasMusic, startSec, duration, width };
+  const scrubState = useRef({ player, audio, isVideo, hasMusic, startSec, endSec, duration, width });
+  scrubState.current = { player, audio, isVideo, hasMusic, startSec, endSec, duration, width };
   const scrub = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: (e) => {
         scrubbing.current = true;
+        setSeeking(true);
         scrubTo(scrubState.current, e.nativeEvent.pageX, seekTarget, setPosition);
       },
       onPanResponderMove: (e) => scrubTo(scrubState.current, e.nativeEvent.pageX, seekTarget, setPosition),
       onPanResponderRelease: () => {
         const st = scrubState.current;
+        const t = seekTarget.current;
         try {
-          if (st.isVideo) st.player.currentTime = seekTarget.current;
-          else if (st.hasMusic) st.audio.seekTo(st.startSec + seekTarget.current).catch(() => {});
+          if (st.isVideo) {
+            st.player.currentTime = t;
+            // A video WITH music: move the music to match, so the two stay in
+            // sync after seeking (music runs alongside the video from startSec;
+            // wraps if the track is shorter than the clip). Keep lastVideoPos in
+            // step so the loop-detector doesn't treat a backward seek as a loop.
+            if (st.hasMusic) {
+              const musicEnd = st.endSec != null ? st.endSec : st.audio.duration || 0;
+              const avail = musicEnd - st.startSec;
+              const mt = avail > 0 ? st.startSec + (t % avail) : st.startSec + t;
+              st.audio.seekTo(mt).catch(() => {});
+            }
+            lastVideoPos.current = t;
+          } else if (st.hasMusic) {
+            st.audio.seekTo(st.startSec + t).catch(() => {});
+          }
         } catch {
           // ignore
         }
         scrubbing.current = false;
+        setSeeking(false);
       },
     }),
   ).current;
@@ -399,10 +445,12 @@ export default function FeedItemView({
         </View>
       ) : null}
 
-      {/* Scrubber — appears on tap (while paused); drag to seek. */}
-      {hasControls && paused ? (
+      {/* Progress bar — always visible while there are controls; drag to seek.
+          The time read-out only shows while paused or actively scrubbing, so it
+          never sits on top of the caption during normal playback. */}
+      {hasControls ? (
         <View style={s.scrubberWrap} {...scrub.panHandlers}>
-          <Text style={s.scrubTime}>
+          <Text style={[s.scrubTime, { opacity: paused || seeking ? 1 : 0 }]}>
             {mmss(position)} / {mmss(duration)}
           </Text>
           <View style={s.scrubTrack}>
@@ -454,8 +502,8 @@ const s = StyleSheet.create({
   },
   buyText: { color: "#000", fontWeight: "800", fontSize: 15 },
   lockNote: { color: colors.dim, marginTop: 10, fontSize: 12 },
-  // Offsets clear the taller (68px) tab bar so nothing hides behind it.
-  meta: { position: "absolute", left: 14, bottom: 90, right: 90 },
+  // Sits above the always-visible progress bar (which clears the 68px tab bar).
+  meta: { position: "absolute", left: 14, bottom: 118, right: 90 },
   handle: { color: colors.text, fontWeight: "800", fontSize: 16 },
   title: { color: colors.text, marginTop: 4 },
   ownedBadge: { color: colors.success, marginTop: 6, fontWeight: "700", fontSize: 12 },

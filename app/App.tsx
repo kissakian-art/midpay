@@ -21,26 +21,41 @@ import { colors } from "./src/theme";
 const Tab = createBottomTabNavigator();
 const Stack = createNativeStackNavigator();
 
+// Every tab icon lives in an identical fixed-height, centred box so the emoji
+// glyphs and the boxed "+" share the same vertical centre and line up in a row.
+const ICON_BOX = {
+  height: 32,
+  alignItems: "center",
+  justifyContent: "center",
+} as const;
+
 function tabIcon(label: string) {
+  // Inactive icons stay near full brightness: the monochrome 👤 (profile) glyph
+  // was washing out against the black bar at 0.5. Active vs inactive is carried
+  // by the label colour (white vs grey), so the icons can stay clearly visible.
   return ({ focused }: { focused: boolean }) => (
-    <Text style={{ fontSize: 26, opacity: focused ? 1 : 0.5 }}>{label}</Text>
+    <View style={ICON_BOX}>
+      <Text style={{ fontSize: 26, opacity: focused ? 1 : 0.9 }}>{label}</Text>
+    </View>
   );
 }
 
-/** The centre "create" button, raised and boxed like TikTok's. */
+/** The centre "create" button — boxed like TikTok's, aligned with the row. */
 function createIcon() {
   return () => (
-    <View
-      style={{
-        width: 46,
-        height: 32,
-        borderRadius: 9,
-        backgroundColor: colors.accent,
-        alignItems: "center",
-        justifyContent: "center",
-      }}
-    >
-      <Text style={{ fontSize: 22, fontWeight: "900", color: "#000", lineHeight: 25 }}>+</Text>
+    <View style={ICON_BOX}>
+      <View
+        style={{
+          width: 46,
+          height: 30,
+          borderRadius: 9,
+          backgroundColor: colors.accent,
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        <Text style={{ fontSize: 22, fontWeight: "900", color: "#000", lineHeight: 25 }}>+</Text>
+      </View>
     </View>
   );
 }

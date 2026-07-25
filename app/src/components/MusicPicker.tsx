@@ -1,3 +1,4 @@
+import { useAudioPlayer } from "expo-audio";
 import * as DocumentPicker from "expo-document-picker";
 import React, { useEffect, useState } from "react";
 import {
@@ -11,7 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { createTrack, listTracks, uploadTrackAudio, type Track } from "../api";
+import { createTrack, listTracks, musicAudioUrl, uploadTrackAudio, type Track } from "../api";
 import { colors } from "../theme";
 
 interface Props {
@@ -23,14 +24,20 @@ interface Props {
 
 /**
  * Music picker: browse the shared track library (search) or upload a sound from
- * the device. Selecting attaches the track to the post; it plays over the media
- * in the feed. (Admin-curated catalog + "original sound" extraction are later.)
+ * the device. Tapping a library track PREVIEWS it (plays immediately) so the
+ * creator hears it before posting; "Use this sound" attaches it to the post.
  */
 export default function MusicPicker({ visible, currentTrackId, onSelect, onClose }: Props) {
   const [q, setQ] = useState("");
   const [tracks, setTracks] = useState<Track[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
+
+  // Preview: one shared player; `playingId` is the track currently sounding,
+  // `chosen` is the track "Use this sound" will attach.
+  const player = useAudioPlayer(null);
+  const [playingId, setPlayingId] = useState<string | null>(null);
+  const [chosen, setChosen] = useState<Track | null>(null);
 
   useEffect(() => {
     if (!visible) return;
@@ -45,6 +52,51 @@ export default function MusicPicker({ visible, currentTrackId, onSelect, onClose
     };
   }, [visible, q]);
 
+  // Stop any preview when the sheet closes.
+  useEffect(() => {
+    if (!visible) stopPreview();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visible]);
+
+  function stopPreview() {
+    try {
+      player.pause();
+    } catch {
+      // released
+    }
+    setPlayingId(null);
+  }
+
+  // Tap a track → toggle its preview and mark it as the chosen sound.
+  function togglePreview(track: Track) {
+    setChosen(track);
+    if (playingId === track.id) {
+      stopPreview();
+      return;
+    }
+    try {
+      player.replace({ uri: musicAudioUrl(track.id) });
+      player.volume = 1;
+      player.seekTo(0).catch(() => {});
+      player.play();
+      setPlayingId(track.id);
+    } catch {
+      // player not ready
+    }
+  }
+
+  function useChosen() {
+    stopPreview();
+    onSelect(chosen);
+    onClose();
+  }
+
+  function chooseNone() {
+    stopPreview();
+    onSelect(null);
+    onClose();
+  }
+
   const pickFromDevice = async () => {
     try {
       const res = await DocumentPicker.getDocumentAsync({
@@ -57,6 +109,7 @@ export default function MusicPicker({ visible, currentTrackId, onSelect, onClose
       const title = (a.name || "My sound").replace(/\.[^/.]+$/, "").slice(0, 120);
       const { track } = await createTrack({ title });
       await uploadTrackAudio(track.id, a.uri, a.mimeType || "audio/mpeg");
+      stopPreview();
       onSelect(track); // auto-attach the freshly uploaded sound
       onClose();
     } catch (e) {
@@ -93,13 +146,7 @@ export default function MusicPicker({ visible, currentTrackId, onSelect, onClose
             )}
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={[s.row, !currentTrackId && s.rowActive]}
-            onPress={() => {
-              onSelect(null);
-              onClose();
-            }}
-          >
+          <TouchableOpacity style={[s.row, !currentTrackId && s.rowActive]} onPress={chooseNone}>
             <Text style={s.rowIcon}>🚫</Text>
             <Text style={s.rowTitle}>No music</Text>
           </TouchableOpacity>
@@ -112,30 +159,41 @@ export default function MusicPicker({ visible, currentTrackId, onSelect, onClose
               keyExtractor={(t) => t.id}
               style={s.list}
               ListEmptyComponent={<Text style={s.empty}>No sounds yet — upload one above.</Text>}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[s.row, currentTrackId === item.id && s.rowActive]}
-                  onPress={() => {
-                    onSelect(item);
-                    onClose();
-                  }}
-                >
-                  <Text style={s.rowIcon}>🎵</Text>
-                  <View style={{ flex: 1 }}>
-                    <Text style={s.rowTitle} numberOfLines={1}>
-                      {item.title}
+              renderItem={({ item }) => {
+                const isPlaying = playingId === item.id;
+                const isChosen = chosen?.id === item.id || (!chosen && currentTrackId === item.id);
+                return (
+                  <TouchableOpacity
+                    style={[s.row, isChosen && s.rowActive]}
+                    onPress={() => togglePreview(item)}
+                  >
+                    <Text style={[s.rowIcon, isPlaying && { color: colors.accent }]}>
+                      {isPlaying ? "⏸" : "▶"}
                     </Text>
-                    {item.artist ? (
-                      <Text style={s.rowSub} numberOfLines={1}>
-                        {item.artist}
+                    <View style={{ flex: 1 }}>
+                      <Text style={s.rowTitle} numberOfLines={1}>
+                        {item.title}
                       </Text>
-                    ) : null}
-                  </View>
-                  {currentTrackId === item.id ? <Text style={s.check}>✓</Text> : null}
-                </TouchableOpacity>
-              )}
+                      <Text style={s.rowSub} numberOfLines={1}>
+                        {isPlaying ? "Playing…" : item.artist || "Tap to preview"}
+                      </Text>
+                    </View>
+                    {isChosen ? <Text style={s.check}>✓</Text> : null}
+                  </TouchableOpacity>
+                );
+              }}
             />
           )}
+
+          <TouchableOpacity
+            style={[s.useBtn, !chosen && s.useBtnDisabled]}
+            onPress={useChosen}
+            disabled={!chosen}
+          >
+            <Text style={[s.useBtnText, !chosen && { color: colors.dim }]}>
+              {chosen ? `Use “${chosen.title}”` : "Tap a sound to preview"}
+            </Text>
+          </TouchableOpacity>
         </View>
       </View>
     </Modal>
@@ -183,9 +241,18 @@ const s = StyleSheet.create({
     borderRadius: 10,
   },
   rowActive: { backgroundColor: colors.card },
-  rowIcon: { fontSize: 18 },
+  rowIcon: { fontSize: 18, color: colors.text, width: 22, textAlign: "center" },
   rowTitle: { color: colors.text, fontWeight: "700", fontSize: 15 },
   rowSub: { color: colors.dim, fontSize: 12, marginTop: 1 },
   check: { color: colors.accent, fontWeight: "900", fontSize: 16 },
   empty: { color: colors.dim, textAlign: "center", marginTop: 24 },
+  useBtn: {
+    marginTop: 12,
+    backgroundColor: colors.accent,
+    borderRadius: 12,
+    paddingVertical: 14,
+    alignItems: "center",
+  },
+  useBtnDisabled: { backgroundColor: colors.card },
+  useBtnText: { color: "#000", fontWeight: "800", fontSize: 15 },
 });

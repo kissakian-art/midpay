@@ -102,6 +102,7 @@ export interface FeedItem {
   musicTrackId?: string | null;
   musicStartMs?: number | null;
   musicEndMs?: number | null;
+  musicVolume?: number | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */
@@ -234,7 +235,12 @@ export const createContent = (input: {
   musicTrackId?: string;
   musicStartMs?: number;
   musicEndMs?: number;
+  musicVolume?: number;
 }) => req<{ content: { id: string } }>("/content", { method: "POST", json: input });
+
+/** Paid-content price floors (photos have a lower floor than videos). */
+export const getPricing = () =>
+  req<{ recordedFloor: number; photoFloor: number }>("/content/pricing");
 
 // --- Music ---
 /** Public audio URL for a track (streamed straight to the player). */

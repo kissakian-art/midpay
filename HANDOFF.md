@@ -67,7 +67,12 @@ SQL, isolated repos). Migrations `0000`–`0008` all applied to remote D1.
   upload + gated download, thumbnails, global feed with `owned`, text/photo/video
   kinds. Extra columns: `overlays` (JSON), `textStyle` (JSON), `musicTrackId` +
   `musicStartMs` + `musicEndMs`. `GET /content/:id/card` = one item in full feed
-  shape (used by search).
+  shape (used by search). Guards: per-clip 5-min (300s) cap; **price floors by
+  kind** — photos 2,000, videos/text 5,000 (`PHOTO_PRICE_FLOOR` vs
+  `RECORDED_PRICE_FLOOR`, both floors not caps, admin-tunable); **100 free
+  video-minutes/creator** (paid unlimited, §4.5.3 — see §6). Public
+  `GET /content/pricing` → `{recordedFloor, photoFloor}` (app reads it).
+  `content.musicVolume` (0..100) added — music loudness for compose-at-playback.
 - **Music** — `tracks` table (source device|catalog, isPublic, R2 audio).
   `/music/tracks` list+search (public, optional-auth surfaces own), `PUT/GET
   /music/tracks/:id/audio`, `POST /music/tracks` (admins may set `source:catalog`).
@@ -85,10 +90,11 @@ SQL, isolated repos). Migrations `0000`–`0008` all applied to remote D1.
   **SIMULATED** until `FLW_SECRET_KEY`/`FLW_WEBHOOK_HASH` secrets are set.
 - **Payouts** — Payout-Fridays batches, 0.5% duty, float monitor; payout number =
   registration number.
-- **Admin console (API only, no UI)** — RBAC + audit log, config editor
-  (versioned platform_config), analytics, moderation, creator suspend/ban/verify,
-  password change + TOTP 2FA. `POST /admin/bootstrap`. **Separate** from the
-  in-app admin below.
+- **Admin console** — RBAC + audit log, config editor (versioned
+  platform_config), analytics, moderation, creator suspend/ban/verify, password
+  change + TOTP 2FA. `POST /admin/bootstrap`. **Separate** from the in-app admin
+  below (own email+password+TOTP auth, `typ:"admin"` JWT, roles super_admin /
+  finance / moderator / analyst). **Web console UI now built** — see §5a.
 - **Profiles** — display name + bio, profile pictures (R2), claimable unique
   `@usernames`.
 
@@ -102,7 +108,10 @@ music (`source:catalog`) + text-background uploads.
 ## 5. Mobile app — DONE (needs a fresh build to test)
 
 - **Auth** — LoginScreen is **mobile + password** with Log in / Create account
-  toggle. `auth.tsx` `login(phone,password)` + `signup(phone,password)`.
+  toggle. `auth.tsx` `login(phone,password)` + `signup(phone,password)`. Signup
+  now requires accepting **Terms & Conditions** (checkbox + in-app Terms modal;
+  content in [`app/src/terms.ts`](app/src/terms.ts), `TERMS_VERSION`). Acceptance
+  is client-side only — NOT yet recorded server-side (see §6).
 - **Feed** — vertical paging (FlatList **windowed**: `windowSize=3` etc. — this
   fixed an OOM crash), **tap-to-pause + draggable scrubber** (video, or photo/text
   with music), photos render as `Image`, styled text posts, right rail
@@ -110,13 +119,20 @@ music (`source:catalog`) + text-background uploads.
 - **Studio (Create)** — camera (photo/video, filter carousel bakes **photos** via
   Skia, §6), Camera/Upload/**Text** modes. Review screen: **OverlayEditor**
   (draggable text-on-shape), **🎵 Music** (picker: shared library + upload from
-  device; **MusicTrimmer** range-slider for photo/text segments), price, post.
+  device — **tap a library track to PREVIEW it** (expo-audio) + "Use this sound";
+  **MusicTrimmer** range-slider for photo/text segments; **music volume** presets
+  Mute/25/50/75/100% so tutorials can duck music under narration), a **creator-set
+  price** (Free / Paid + amount field; kind-aware floor — photos 2,000, else 5,000,
+  fetched from `/content/pricing`; `PriceControls` in StudioScreen), post.
   Text composer is **WYSIWYG** (type on a gradient/image background) with a style
   strip (12 backgrounds + admin image backgrounds, 7 fonts, 6 colours, align,
   bold) + music.
 - **Feed playback** — `FeedItemView` plays a post's music over the media
-  (`expo-audio`): video caps music to the clip; photo/text loops the chosen
-  segment; pause pauses both.
+  (`expo-audio`) at `item.musicVolume` (0..100, default 100): video caps music to
+  the clip; photo/text loops the chosen segment; pause pauses both. **The video's
+  own audio is now kept (not muted)** so music layers UNDER narration — the
+  tutorial fix. (A future "mute original audio" toggle would restore the old
+  music-replaces-clip behaviour for music-video posts.)
 - **Comments** — `CommentsSheet`: safe-area bottom (clears nav bar), per-comment
   like heart, threaded replies with a "Replying to @x" banner, avatars.
 - **Search** — `SearchScreen`: debounced, grouped results; creator→profile,
@@ -145,6 +161,39 @@ Admin button appears.
 
 ---
 
+## 5a. Admin web console — DONE and deployed
+
+The `/admin/*` API now has a UI: a **self-contained single-page console** served
+by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
+
+- **File:** [`src/http/console.html`](src/http/console.html) — one HTML file
+  (inline CSS + vanilla JS, no build step, no external deps/CDN). Imported as a
+  text module (`wrangler.toml` `[[rules]] type="Text"` + `src/html-modules.d.ts`)
+  and served via `app.get("/console", …)` in [`src/http/app.ts`](src/http/app.ts).
+- **Auth:** logs in through `POST /admin/auth/login` (email + password, reveals a
+  TOTP field on `totp_required`); stores the admin JWT in `localStorage`;
+  re-validates via `/admin/me` on load.
+- **Tabs:** Dashboard (analytics self-funding/revenue/by-type/leaderboards +
+  wallet float), Moderation (report queue + resolve, content
+  quarantine/restore/remove, live kill-switch), Creators (**find by @handle /
+  phone / creator-id** + suspend/ban/reinstate/verify), Config (effective values
+  + inline edit + history), Payouts (float, build/approve/execute batches +
+  per-batch payouts), Account (change password, enable/disable TOTP 2FA).
+- **Creator lookup:** `GET /admin/creators/lookup?q=` (moderator role) resolves a
+  `@handle` or phone → `{ user, creator }` (user first, since creators are 1:1
+  with users; `creator` is null when the account exists but isn't a creator).
+  Registered BEFORE `/creators/:id` so the param route doesn't swallow it.
+  `CreatorAdminService.lookup` (now also injected with `UserRepository`).
+- **Existing Super Admin:** `kissakian@gmail.com` (role `super_admin`, TOTP not
+  yet enabled). Use it to log in at `/console`.
+- **Why a web console, not in-app:** the admin API is a *separate* auth world
+  (email+password+TOTP, RBAC) — wrong fit for the phone-login mobile app.
+- Verified: page serves 200 text/html; boots with no JS errors; login error path
+  works end-to-end (wrong creds → "Wrong email or password"). Authenticated views
+  are wired to the real endpoints (couldn't drive them here — no console password).
+
+---
+
 ## 6. What's PENDING / deferred
 
 - **Flutterwave keys — the only remaining launch blocker.** When they arrive:
@@ -161,12 +210,32 @@ Admin button appears.
   build chasing the v4 path — verified dead.
 - **Live streaming video** — chat backbone (LiveRoom DO) exists; needs Agora/ZEGO
   account + SDK + live UI.
-- **Admin web console UI** — the admin *API* is complete; no front-end (the
-  in-app `users.isAdmin` admin is separate and only covers catalog uploads).
+- ~~Admin web console UI~~ — **DONE** (§5a), incl. creator lookup by
+  @handle/phone/creator-id. Follow-ups if wanted: audit-log viewer, and a
+  moderation deep-link from a reported target to its content/creator.
 - **Search follow-ups** — sound results aren't tappable (no "posts using this
   sound" screen); comment match is a substring (the "3 words" was simplified).
 - **Music follow-ups** — "original sound" extracted from a video's own audio;
   trim/volume on video music (`musicEndMs` wired but video uses cap-to-clip).
+- **T&C — record acceptance server-side.** Signup now shows + gates on a Terms
+  modal, but acceptance is client-only. For enforceability, add
+  `users.termsVersion`/`termsAcceptedAt` and have `POST /auth/signup` accept the
+  version. Terms text ([`app/src/terms.ts`](app/src/terms.ts)) is a DRAFT from
+  the brief's economics — have a Ugandan lawyer review before launch.
+- **Free-content allowance (§4.5.3) — BUILT + verified 2026-07-25.** Owner
+  reversed the earlier "unlimited free" call for a strict launch budget
+  ([[open-signup-model]]): **100 free video-minutes per creator; paid unlimited.**
+  `FREE_CONTENT_MINUTES` config (default 100, admin-tunable, 0=disabled),
+  `content.repo.sumFreeVideoSeconds`, enforced in `content.service` create + the
+  paid→free update path (error `free_minutes_exhausted`, 422; detail carries
+  used/remaining). Only videos consume it; photos/text don't. Still separate from
+  the per-clip 5-min (300s) cap. NOT yet built: per-standing multipliers, free-
+  upload rate limit (the rest of §4.5.3) — add only if abuse shows up.
+- **Video quality cap = 720p.** Camera records at **720p** (`videoQuality` prop on
+  `CameraView`; falls back to device max if unavailable). Gallery uploads: a
+  picked video whose **shorter side > 720** is **rejected** with a message (can't
+  downscale on-device — no server transcode). Photos unaffected (`quality:0.9`).
+  If a transcode service is added later, swap the reject for a downscale step.
 - **Polish backlog** — locked-paid-video poster; pull-to-refresh niceties.
 
 ---

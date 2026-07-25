@@ -2,7 +2,9 @@ import React, { useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +13,7 @@ import {
 } from "react-native";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
+import { TERMS_SECTIONS } from "../terms";
 import { colors } from "../theme";
 
 export default function LoginScreen() {
@@ -20,8 +23,14 @@ export default function LoginScreen() {
   const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [agreed, setAgreed] = useState(false);
+  const [termsOpen, setTermsOpen] = useState(false);
 
-  const canSubmit = phone.trim().length >= 4 && password.length >= 6 && !busy;
+  const canSubmit =
+    phone.trim().length >= 4 &&
+    password.length >= 6 &&
+    (mode === "login" || agreed) &&
+    !busy;
 
   const submit = async () => {
     setError(null);
@@ -64,6 +73,30 @@ export default function LoginScreen() {
         onChangeText={setPassword}
       />
 
+      {mode === "signup" ? (
+        <TouchableOpacity
+          style={s.agreeRow}
+          activeOpacity={0.8}
+          onPress={() => setAgreed((a) => !a)}
+        >
+          <View style={[s.checkbox, agreed && s.checkboxOn]}>
+            {agreed ? <Text style={s.checkboxTick}>✓</Text> : null}
+          </View>
+          <Text style={s.agreeText}>
+            I agree to the{" "}
+            <Text
+              style={s.agreeLink}
+              onPress={() => {
+                setTermsOpen(true);
+              }}
+            >
+              Terms &amp; Conditions
+            </Text>
+            {" "}(earnings, charges, and content rules).
+          </Text>
+        </TouchableOpacity>
+      ) : null}
+
       <TouchableOpacity style={[s.btn, !canSubmit && s.btnDisabled]} disabled={!canSubmit} onPress={submit}>
         {busy ? (
           <ActivityIndicator color="#000" />
@@ -71,6 +104,34 @@ export default function LoginScreen() {
           <Text style={s.btnText}>{mode === "signup" ? "Create account" : "Log in"}</Text>
         )}
       </TouchableOpacity>
+
+      <Modal visible={termsOpen} animationType="slide" onRequestClose={() => setTermsOpen(false)}>
+        <View style={s.termsRoot}>
+          <Text style={s.termsTitle}>MidPay Terms &amp; Conditions</Text>
+          <ScrollView style={s.termsScroll} contentContainerStyle={{ paddingBottom: 24 }}>
+            {TERMS_SECTIONS.map((sec) => (
+              <View key={sec.heading} style={{ marginBottom: 16 }}>
+                <Text style={s.termsHeading}>{sec.heading}</Text>
+                <Text style={s.termsBody}>{sec.body}</Text>
+              </View>
+            ))}
+          </ScrollView>
+          <View style={s.termsActions}>
+            <TouchableOpacity style={s.termsClose} onPress={() => setTermsOpen(false)}>
+              <Text style={s.termsCloseText}>Close</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[s.btn, { flex: 1 }]}
+              onPress={() => {
+                setAgreed(true);
+                setTermsOpen(false);
+              }}
+            >
+              <Text style={s.btnText}>I agree</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       <TouchableOpacity
         onPress={() => {
@@ -112,4 +173,36 @@ const s = StyleSheet.create({
   link: { color: colors.accent, textAlign: "center", marginTop: 18 },
   fine: { color: colors.dim, textAlign: "center", marginTop: 12, fontSize: 12 },
   error: { color: colors.danger, textAlign: "center", marginTop: 14 },
+  // T&C acceptance
+  agreeRow: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 16 },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  checkboxOn: { backgroundColor: colors.accent, borderColor: colors.accent },
+  checkboxTick: { color: "#000", fontSize: 14, fontWeight: "900", lineHeight: 16 },
+  agreeText: { color: colors.text, flex: 1, fontSize: 13, lineHeight: 19 },
+  agreeLink: { color: colors.accent, fontWeight: "700" },
+  // Terms modal
+  termsRoot: { flex: 1, backgroundColor: colors.bg, paddingTop: 54, paddingHorizontal: 20 },
+  termsTitle: { color: colors.text, fontSize: 22, fontWeight: "800", marginBottom: 12 },
+  termsScroll: { flex: 1 },
+  termsHeading: { color: colors.text, fontSize: 15, fontWeight: "800", marginBottom: 4 },
+  termsBody: { color: colors.dim, fontSize: 14, lineHeight: 21 },
+  termsActions: { flexDirection: "row", gap: 12, paddingVertical: 14 },
+  termsClose: {
+    flex: 1,
+    borderRadius: 12,
+    padding: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  termsCloseText: { color: colors.text, fontWeight: "700", fontSize: 16 },
 });

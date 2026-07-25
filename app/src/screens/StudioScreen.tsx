@@ -25,6 +25,7 @@ import {
   applyCreator,
   backgroundImageUrl,
   createContent,
+  getPricing,
   listBackgrounds,
   publishContent,
   uploadMedia,
@@ -63,6 +64,99 @@ function mmss(total: number): string {
   return `${m}:${s.toString().padStart(2, "0")}`;
 }
 
+// §3.2 price floors are a MINIMUM, not a fixed price/cap — creators may set any
+// amount at or above the floor (backend re-validates). Photos have a lower floor
+// than videos; the live values come from GET /content/pricing.
+const DEFAULT_FLOORS = { recordedFloor: 5000, photoFloor: 2000 };
+
+/** Parse the price field to an integer UGX, clamped up to the given floor. */
+function clampPrice(text: string, floor: number): number {
+  const n = parseInt(text, 10);
+  return Number.isFinite(n) && n >= floor ? n : floor;
+}
+
+const VOLUME_STEPS = [0, 25, 50, 75, 100];
+
+/** Music loudness presets (0..100) — lets a creator duck background music under
+ *  a video's own narration so tutorials aren't overwhelmed. */
+function VolumeControls({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <View style={s.volumeWrap}>
+      <Text style={s.volumeLabel}>🔊  Music volume · {value}%</Text>
+      <View style={s.volumeRow}>
+        {VOLUME_STEPS.map((v) => (
+          <TouchableOpacity
+            key={v}
+            style={[s.volPill, value === v && s.volPillActive]}
+            onPress={() => onChange(v)}
+          >
+            <Text style={[s.volPillText, value === v && s.volPillTextActive]}>
+              {v === 0 ? "Mute" : `${v}%`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+/** Free / Paid toggle + (when paid) a creator-set price field. Used by both the
+ *  text composer and the media review screen. */
+function PriceControls({
+  paid,
+  setPaid,
+  priceText,
+  setPriceText,
+  floor,
+  style,
+}: {
+  paid: boolean;
+  setPaid: (b: boolean) => void;
+  priceText: string;
+  setPriceText: (t: string) => void;
+  floor: number;
+  style?: object;
+}) {
+  const price = clampPrice(priceText, floor);
+  return (
+    <View style={style}>
+      <View style={s.priceRow}>
+        <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
+          <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[s.toggle, paid && s.toggleActive]}
+          onPress={() => {
+            setPaid(true);
+            // Snap up to the floor when switching to paid if below it.
+            if (clampPrice(priceText, floor) !== Number(priceText)) setPriceText(String(floor));
+          }}
+        >
+          <Text style={[s.toggleText, paid && s.toggleTextActive]}>
+            {paid ? `Paid · ${price.toLocaleString()} UGX` : "Paid"}
+          </Text>
+        </TouchableOpacity>
+      </View>
+      {paid ? (
+        <View style={s.priceInputRow}>
+          <Text style={s.priceCurrency}>UGX</Text>
+          <TextInput
+            style={s.priceInput}
+            keyboardType="number-pad"
+            value={priceText}
+            onChangeText={(t) => setPriceText(t.replace(/[^0-9]/g, ""))}
+            onBlur={() => setPriceText(String(clampPrice(priceText, floor)))}
+            placeholder={String(floor)}
+            placeholderTextColor={colors.dim}
+            maxLength={9}
+          />
+          <Text style={s.priceHint}>Minimum {floor.toLocaleString()}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
 /** Grab a JPEG first-frame from a local video for the post cover. Best-effort. */
 async function makeVideoThumbnail(videoUri: string): Promise<string | null> {
   try {
@@ -93,7 +187,16 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [music, setMusic] = useState<Track | null>(null);
   const [musicStart, setMusicStart] = useState(0);
   const [musicEnd, setMusicEnd] = useState<number | null>(null);
+  const [musicVolume, setMusicVolume] = useState(100); // 0..100 playback loudness
   const [musicOpen, setMusicOpen] = useState(false);
+  const [floors, setFloors] = useState(DEFAULT_FLOORS);
+
+  // Live price floors (photo floor is lower than video). Backend re-validates.
+  useEffect(() => {
+    getPricing()
+      .then((p) => setFloors({ recordedFloor: p.recordedFloor, photoFloor: p.photoFloor }))
+      .catch(() => {});
+  }, []);
   const [textBody, setTextBody] = useState("");
   const [textStyle, setTextStyle] = useState<TextStyle>(DEFAULT_TEXT_STYLE);
   const [bgCatalog, setBgCatalog] = useState<string[]>([]);
@@ -104,7 +207,9 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
     if (createMode !== "text") return;
     listBackgrounds().then((r) => setBgCatalog(r.backgrounds.map((b) => b.id))).catch(() => {});
   }, [createMode]);
-  const priceUgx = 5000;
+  // Paid price is creator-set at or above the 5,000 UGX floor (§3.2 — a floor,
+  // not a fixed price). Kept as text while editing; clamped to the floor on use.
+  const [priceText, setPriceText] = useState("5000");
 
   const groupFilters = useMemo(
     () => FILTER_GROUPS.find((g) => g.group === group)?.filters ?? [],
@@ -150,6 +255,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       ? {
           musicTrackId: music.id,
           musicStartMs: musicStart,
+          musicVolume,
           ...(musicEnd != null ? { musicEndMs: musicEnd } : {}),
         }
       : {};
@@ -158,6 +264,9 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const openCapture = (c: Capture) => {
     setOverlays([]);
     selectMusic(null);
+    setMusicVolume(100);
+    // Seed the price at the floor for this kind (photo floor is lower).
+    setPriceText(String(c.kind === "photo" ? floors.photoFloor : floors.recordedFloor));
     setCapture(c);
   };
   const closeReview = () => {
@@ -223,11 +332,19 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       });
       if (!r.canceled && r.assets[0]) {
         const a = r.assets[0];
-        openCapture({
-          uri: a.uri,
-          kind: a.type === "image" ? "photo" : "video",
-          filtered: false,
-        });
+        const kind = a.type === "image" ? "photo" : "video";
+        // 720p cap: the platform's max quality. Photos are fine; a video whose
+        // SHORTER side exceeds 720 (i.e. above 720p in either orientation) is
+        // rejected — we can't downscale on-device (no server transcode yet).
+        const shorterSide = Math.min(a.width || 0, a.height || 0);
+        if (kind === "video" && shorterSide > 720) {
+          Alert.alert(
+            "Video quality too high",
+            `MidPay supports up to 720p. This clip is ${a.width}×${a.height}. Pick a 720p (or lower) video, or record one in the app.`,
+          );
+          return;
+        }
+        openCapture({ uri: a.uri, kind, filtered: false });
       }
     } catch (e) {
       Alert.alert("Couldn't open gallery", e instanceof Error ? e.message : "Try again");
@@ -252,7 +369,14 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         kind: capture.kind,
         title: filter.id === "none" ? "New post" : `${filter.name} post`,
         pricing: paid ? "paid" : "free",
-        ...(paid ? { priceUgx } : {}),
+        ...(paid
+          ? {
+              priceUgx: clampPrice(
+                priceText,
+                capture.kind === "photo" ? floors.photoFloor : floors.recordedFloor,
+              ),
+            }
+          : {}),
         ...(overlays.length ? { overlays } : {}),
         ...musicParams(),
       });
@@ -293,7 +417,7 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         title: body.slice(0, 60),
         description: body,
         pricing: paid ? "paid" : "free",
-        ...(paid ? { priceUgx } : {}),
+        ...(paid ? { priceUgx: clampPrice(priceText, floors.recordedFloor) } : {}),
         textStyle,
         ...musicParams(),
       });
@@ -442,26 +566,29 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
             )}
           </TouchableOpacity>
           {music ? (
-            <MusicTrimmer
-              trackId={music.id}
-              startMs={musicStart}
-              endMs={musicEnd}
-              onChange={(sMs, eMs) => {
-                setMusicStart(sMs);
-                setMusicEnd(eMs);
-              }}
-            />
+            <>
+              <MusicTrimmer
+                trackId={music.id}
+                startMs={musicStart}
+                endMs={musicEnd}
+                onChange={(sMs, eMs) => {
+                  setMusicStart(sMs);
+                  setMusicEnd(eMs);
+                }}
+              />
+              <VolumeControls value={musicVolume} onChange={setMusicVolume} />
+            </>
           ) : null}
         </View>
 
-        <View style={[s.priceRow, s.composerPad]}>
-          <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
-            <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[s.toggle, paid && s.toggleActive]} onPress={() => setPaid(true)}>
-            <Text style={[s.toggleText, paid && s.toggleTextActive]}>Paid · 5,000 UGX</Text>
-          </TouchableOpacity>
-        </View>
+        <PriceControls
+          paid={paid}
+          setPaid={setPaid}
+          priceText={priceText}
+          setPriceText={setPriceText}
+          floor={floors.recordedFloor}
+          style={s.composerPad}
+        />
         <TouchableOpacity
           style={[s.primaryBtn, s.composerPost]}
           onPress={postText}
@@ -489,6 +616,9 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         style={StyleSheet.absoluteFill}
         facing={facing}
         mode={mode}
+        // Cap recording at 720p — the platform's max quality (budget/bandwidth).
+        // If the device can't do 720p, expo-camera falls back to its highest.
+        videoQuality="720p"
         onCameraReady={() => setReady(true)}
       />
 
@@ -600,15 +730,16 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
                 }}
               />
             ) : null}
+            {/* Volume applies to any media with music — key for tutorials. */}
+            {music ? <VolumeControls value={musicVolume} onChange={setMusicVolume} /> : null}
 
-            <View style={s.priceRow}>
-              <TouchableOpacity style={[s.toggle, !paid && s.toggleActive]} onPress={() => setPaid(false)}>
-                <Text style={[s.toggleText, !paid && s.toggleTextActive]}>Free</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[s.toggle, paid && s.toggleActive]} onPress={() => setPaid(true)}>
-                <Text style={[s.toggleText, paid && s.toggleTextActive]}>Paid · 5,000 UGX</Text>
-              </TouchableOpacity>
-            </View>
+            <PriceControls
+              paid={paid}
+              setPaid={setPaid}
+              priceText={priceText}
+              setPriceText={setPriceText}
+              floor={capture?.kind === "photo" ? floors.photoFloor : floors.recordedFloor}
+            />
 
             <View style={s.reviewActions}>
               <TouchableOpacity style={s.secondaryBtn} onPress={closeReview} disabled={!!busy}>
@@ -777,6 +908,35 @@ const s = StyleSheet.create({
   musicClear: { color: colors.dim, fontSize: 15, fontWeight: "800", paddingHorizontal: 4 },
   musicChevron: { color: colors.dim, fontSize: 20, fontWeight: "800" },
   priceRow: { flexDirection: "row", gap: 10, marginTop: 16 },
+  priceInputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
+  priceCurrency: { color: colors.dim, fontWeight: "700", fontSize: 15 },
+  priceInput: {
+    flex: 1,
+    backgroundColor: colors.card,
+    color: colors.text,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: "700",
+  },
+  priceHint: { color: colors.dim, fontSize: 12 },
+  volumeWrap: { marginTop: 12 },
+  volumeLabel: { color: colors.text, fontWeight: "700", fontSize: 13, marginBottom: 8 },
+  volumeRow: { flexDirection: "row", gap: 8 },
+  volPill: {
+    flex: 1,
+    paddingVertical: 9,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
+    alignItems: "center",
+  },
+  volPillActive: { backgroundColor: colors.accent, borderColor: colors.accent },
+  volPillText: { color: colors.dim, fontWeight: "700", fontSize: 12 },
+  volPillTextActive: { color: "#000" },
   toggle: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   toggleActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   toggleText: { color: colors.dim, fontWeight: "700" },
