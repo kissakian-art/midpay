@@ -4,11 +4,17 @@ import type { Env } from "../env";
 import { OtpRepository } from "../repositories/otp.repository";
 import { UserRepository } from "../repositories/user.repository";
 import { ConfigService } from "./config.service";
-import { randomNumericCode, sha256Hex, timingSafeEqual } from "./crypto";
+import { hashPassword, randomNumericCode, sha256Hex, timingSafeEqual, verifyPassword } from "./crypto";
 
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
+
+/** Strip secrets before a user object is sent to any client. */
+export function publicUser(u: User): Omit<User, "passwordHash"> {
+  const { passwordHash: _p, ...rest } = u;
+  return rest;
+}
 
 export class AuthError extends Error {
   constructor(
@@ -41,6 +47,58 @@ export class AuthService {
   private async sendSms(phone: string, code: string): Promise<void> {
     // TODO(launch): integrate a Ugandan SMS/OTP provider. For now, log only.
     console.log(`[otp] would send code ${code} to ${phone}`);
+  }
+
+  // --- Mobile + password auth (primary; OTP kept for legacy/transition) ---
+
+  /** Register with a mobile number + password. Also "claims" a legacy OTP-only
+   *  account (one with no password yet) by setting its first password. */
+  async signup(
+    phoneRaw: string,
+    password: string,
+  ): Promise<{ token: string; user: User; isNew: boolean }> {
+    const phone = normalizePhone(phoneRaw);
+    if (!password || password.length < 6) {
+      throw new AuthError("weak_password", "Password must be at least 6 characters.");
+    }
+    const now = new Date();
+    const existing = await this.users.findByPhone(phone);
+    if (existing) {
+      if (existing.passwordHash) {
+        throw new AuthError("already_registered", "This number is already registered. Log in instead.");
+      }
+      if (existing.status !== "active") {
+        throw new AuthError("account_disabled", `Account is ${existing.status}.`);
+      }
+      const updated = await this.users.update(existing.id, {
+        passwordHash: await hashPassword(password),
+        phoneVerifiedAt: existing.phoneVerifiedAt ?? now,
+      });
+      return { token: await this.issueToken(existing.id), user: updated ?? existing, isNew: false };
+    }
+    const user = await this.users.create({
+      phone,
+      handle: `user_${crypto.randomUUID().slice(0, 8)}`,
+      passwordHash: await hashPassword(password),
+      phoneVerifiedAt: now,
+    });
+    return { token: await this.issueToken(user.id), user, isNew: true };
+  }
+
+  /** Log in with a mobile number + password. */
+  async loginWithPassword(
+    phoneRaw: string,
+    password: string,
+  ): Promise<{ token: string; user: User }> {
+    const phone = normalizePhone(phoneRaw);
+    const user = await this.users.findByPhone(phone);
+    if (user && !user.passwordHash) {
+      throw new AuthError("no_password", "No password set for this number yet — tap Sign up to create one.");
+    }
+    const ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : false;
+    if (!user || !ok) throw new AuthError("invalid_credentials", "Wrong number or password.");
+    if (user.status !== "active") throw new AuthError("account_disabled", `Account is ${user.status}.`);
+    return { token: await this.issueToken(user.id), user };
   }
 
   /** Step 1 — issue an OTP challenge for a phone number. */

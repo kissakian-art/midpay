@@ -18,6 +18,9 @@ export const users = sqliteTable(
     displayName: text("display_name"),
     avatarR2Key: text("avatar_r2_key"),
     bio: text("bio"),
+    // PBKDF2 password hash (mobile + password auth). NULL for legacy OTP-only
+    // accounts until they set one.
+    passwordHash: text("password_hash"),
     // 'active' | 'suspended' | 'banned' | 'deleted'
     status: text("status", {
       enum: ["active", "suspended", "banned", "deleted"],

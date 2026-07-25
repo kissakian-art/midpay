@@ -9,102 +9,83 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { ApiError, requestOtp } from "../api";
+import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { colors } from "../theme";
 
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, signup } = useAuth();
+  const [mode, setMode] = useState<"login" | "signup">("login");
   const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [stage, setStage] = useState<"phone" | "code">("phone");
-  const [devCode, setDevCode] = useState<string | undefined>();
+  const [password, setPassword] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const submitPhone = async () => {
-    setError(null);
-    setBusy(true);
-    try {
-      const r = await requestOtp(phone);
-      if (r.bypass) {
-        // Verification disabled (dev config) — log straight in.
-        await login(phone, "000000");
-        return;
-      }
-      setDevCode(r.devCode);
-      setStage("code");
-    } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Network error — try again");
-    } finally {
-      setBusy(false);
-    }
-  };
+  const canSubmit = phone.trim().length >= 4 && password.length >= 6 && !busy;
 
-  const submitCode = async () => {
+  const submit = async () => {
     setError(null);
     setBusy(true);
     try {
-      await login(phone, code);
+      if (mode === "signup") await signup(phone.trim(), password);
+      else await login(phone.trim(), password);
     } catch (e) {
-      setError(e instanceof ApiError ? e.message : "Network error — try again");
+      // "no_password" legacy accounts should sign up to set a password.
+      if (e instanceof ApiError && e.code === "no_password") {
+        setMode("signup");
+        setError("No password yet for this number — set one to continue.");
+      } else {
+        setError(e instanceof ApiError ? e.message : "Network error — try again");
+      }
       setBusy(false);
     }
   };
 
   return (
-    <KeyboardAvoidingView
-      style={s.root}
-      behavior={Platform.OS === "ios" ? "padding" : undefined}
-    >
+    <KeyboardAvoidingView style={s.root} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <Text style={s.logo}>MidPay</Text>
       <Text style={s.tag}>Watch. Create. Earn.</Text>
 
-      {stage === "phone" ? (
-        <>
-          <TextInput
-            style={s.input}
-            placeholder="Phone number (e.g. 0700 123 456)"
-            placeholderTextColor={colors.dim}
-            keyboardType="phone-pad"
-            value={phone}
-            onChangeText={setPhone}
-            autoFocus
-          />
-          <TouchableOpacity
-            style={[s.btn, (!phone || busy) && s.btnDisabled]}
-            disabled={!phone || busy}
-            onPress={submitPhone}
-          >
-            {busy ? <ActivityIndicator color="#000" /> : <Text style={s.btnText}>Continue</Text>}
-          </TouchableOpacity>
-        </>
-      ) : (
-        <>
-          <Text style={s.hint}>Enter the 6-digit code sent to {phone}</Text>
-          {devCode ? <Text style={s.devCode}>DEV code: {devCode}</Text> : null}
-          <TextInput
-            style={s.input}
-            placeholder="6-digit code"
-            placeholderTextColor={colors.dim}
-            keyboardType="number-pad"
-            maxLength={6}
-            value={code}
-            onChangeText={setCode}
-            autoFocus
-          />
-          <TouchableOpacity
-            style={[s.btn, (code.length !== 6 || busy) && s.btnDisabled]}
-            disabled={code.length !== 6 || busy}
-            onPress={submitCode}
-          >
-            {busy ? <ActivityIndicator color="#000" /> : <Text style={s.btnText}>Verify</Text>}
-          </TouchableOpacity>
-          <TouchableOpacity onPress={() => setStage("phone")}>
-            <Text style={s.link}>Change number</Text>
-          </TouchableOpacity>
-        </>
-      )}
+      <TextInput
+        style={s.input}
+        placeholder="Mobile number (e.g. 0770 123 456)"
+        placeholderTextColor={colors.dim}
+        keyboardType="phone-pad"
+        value={phone}
+        onChangeText={setPhone}
+        autoFocus
+      />
+      <TextInput
+        style={s.input}
+        placeholder="Password"
+        placeholderTextColor={colors.dim}
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+      />
+
+      <TouchableOpacity style={[s.btn, !canSubmit && s.btnDisabled]} disabled={!canSubmit} onPress={submit}>
+        {busy ? (
+          <ActivityIndicator color="#000" />
+        ) : (
+          <Text style={s.btnText}>{mode === "signup" ? "Create account" : "Log in"}</Text>
+        )}
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        onPress={() => {
+          setError(null);
+          setMode((m) => (m === "login" ? "signup" : "login"));
+        }}
+      >
+        <Text style={s.link}>
+          {mode === "login" ? "New here? Create an account" : "Have an account? Log in"}
+        </Text>
+      </TouchableOpacity>
+
+      {mode === "signup" ? (
+        <Text style={s.fine}>Use at least 6 characters for your password.</Text>
+      ) : null}
 
       {error ? <Text style={s.error}>{error}</Text> : null}
     </KeyboardAvoidingView>
@@ -128,8 +109,7 @@ const s = StyleSheet.create({
   btn: { backgroundColor: colors.accent, borderRadius: 12, padding: 16, alignItems: "center" },
   btnDisabled: { opacity: 0.4 },
   btnText: { fontWeight: "700", fontSize: 16, color: "#000" },
-  hint: { color: colors.text, marginBottom: 8, textAlign: "center" },
-  devCode: { color: colors.success, textAlign: "center", marginBottom: 10, fontWeight: "700" },
-  link: { color: colors.accent, textAlign: "center", marginTop: 16 },
+  link: { color: colors.accent, textAlign: "center", marginTop: 18 },
+  fine: { color: colors.dim, textAlign: "center", marginTop: 12, fontSize: 12 },
   error: { color: colors.danger, textAlign: "center", marginTop: 14 },
 });

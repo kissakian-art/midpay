@@ -1,11 +1,12 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { createContext, useContext, useEffect, useState } from "react";
-import { setAuthToken, verifyOtp, type User } from "./api";
+import { loginPassword, setAuthToken, signup as apiSignup, type User } from "./api";
 
 interface AuthState {
   user: User | null;
   loading: boolean;
-  login: (phone: string, code: string) => Promise<void>;
+  login: (phone: string, password: string) => Promise<void>;
+  signup: (phone: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
 
@@ -13,6 +14,7 @@ const AuthContext = createContext<AuthState>({
   user: null,
   loading: true,
   login: async () => {},
+  signup: async () => {},
   logout: async () => {},
 });
 
@@ -37,11 +39,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const login = async (phone: string, code: string) => {
-    const { token, user: u } = await verifyOtp(phone, code);
+  const persist = async (token: string, u: User) => {
     setAuthToken(token);
     await AsyncStorage.setItem(KEY, JSON.stringify({ token, user: u }));
     setUser(u);
+  };
+
+  const login = async (phone: string, password: string) => {
+    const { token, user: u } = await loginPassword(phone, password);
+    await persist(token, u);
+  };
+
+  const signup = async (phone: string, password: string) => {
+    const { token, user: u } = await apiSignup(phone, password);
+    await persist(token, u);
   };
 
   const logout = async () => {
@@ -51,7 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider value={{ user, loading, login, signup, logout }}>
       {children}
     </AuthContext.Provider>
   );

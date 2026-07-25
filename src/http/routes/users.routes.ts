@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { publicUser } from "../../services/auth.service";
 import { badRequest } from "../../services/errors";
 import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
@@ -17,7 +18,7 @@ userRoutes.patch("/me", requireAuth, async (c) => {
     bio: "bio" in body ? optionalString(body, "bio") ?? null : undefined,
     handle: "handle" in body ? requireString(body, "handle") : undefined,
   });
-  return c.json({ user });
+  return c.json({ user: publicUser(user) });
 });
 
 // Is a username free? Powers the live "available / taken" hint while typing.
@@ -35,7 +36,7 @@ userRoutes.put("/me/avatar", requireAuth, async (c) => {
   const user = await c
     .get("container")
     .profile.setAvatar(c.get("userId"), body, c.req.header("content-type"));
-  return c.json({ user });
+  return c.json({ user: publicUser(user) });
 });
 
 // Public avatar image.

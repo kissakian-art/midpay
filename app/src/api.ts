@@ -142,7 +142,20 @@ export interface Message {
   createdAt: string;
 }
 
-// --- Auth ---
+// --- Auth (mobile + password) ---
+export const signup = (phone: string, password: string) =>
+  req<{ token: string; user: User; isNew: boolean }>("/auth/signup", {
+    method: "POST",
+    json: { phone, password },
+  });
+
+export const loginPassword = (phone: string, password: string) =>
+  req<{ token: string; user: User }>("/auth/login", {
+    method: "POST",
+    json: { phone, password },
+  });
+
+// --- Auth (legacy OTP — kept for transition) ---
 export const requestOtp = (phone: string) =>
   req<{ challengeId: string; devCode?: string; bypass?: boolean }>("/auth/otp/request", {
     method: "POST",

@@ -57,6 +57,13 @@
       "when": 1784919335573,
       "tag": "0007_handy_cammi",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784952337798,
+      "tag": "0008_yellow_surge",
+      "breakpoints": true
     }
   ]
 }
