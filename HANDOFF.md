@@ -1,7 +1,11 @@
 # MidPay — Session Handoff
 
-Living status doc for picking up work in a fresh session. Last updated after the
-**mobile+password auth** commit (`c8c1536`), 2026-07-24.
+Living status doc for picking up work in a fresh session. Last updated
+2026-07-26 after the **app: playback/pricing/music** commit (`9eeeb49`) — this
+session added the admin web console + creator lookup, the 100-min free-video
+cap, per-kind price floors (photo 2,000 / video 5,000), 720p quality cap, music
+volume + in-picker preview, feed-playback fixes, the tab-bar tweaks, and T&C at
+signup. All committed to `main` and pushed; backend deployed + migrated.
 
 ---
 
@@ -56,7 +60,8 @@ easier: `POST /auth/signup {phone,password}` on a throwaway number to get a toke
 ## 4. Backend — DONE and deployed
 
 Layered handlers → services → repositories (§2.4 portability: UUID PKs, portable
-SQL, isolated repos). Migrations `0000`–`0008` all applied to remote D1.
+SQL, isolated repos). Migrations `0000`–`0009` all applied to remote D1
+(`0009` = `content.music_volume`).
 
 - **Auth — MOBILE + PASSWORD** (changed 2026-07-24, was phone OTP). PBKDF2 via
   `services/crypto.ts`. `POST /auth/signup` (also claims a legacy OTP-only account
@@ -113,9 +118,12 @@ music (`source:catalog`) + text-background uploads.
   content in [`app/src/terms.ts`](app/src/terms.ts), `TERMS_VERSION`). Acceptance
   is client-side only — NOT yet recorded server-side (see §6).
 - **Feed** — vertical paging (FlatList **windowed**: `windowSize=3` etc. — this
-  fixed an OOM crash), **tap-to-pause + draggable scrubber** (video, or photo/text
-  with music), photos render as `Image`, styled text posts, right rail
-  (follow/like/comment/DM), **🔍 search icon** (top-right).
+  fixed an OOM crash), **tap-to-pause + always-visible progress bar** (drag to
+  seek; time read-out shows while paused/seeking), photos render as `Image`,
+  styled text posts, right rail (follow/like/comment/DM), **🔍 search** (top-right).
+  Playback (video **and** music) stops when the screen is unfocused or the app is
+  backgrounded (`useIsFocused` + `AppState`), and seeking a video-with-music keeps
+  the music in sync.
 - **Studio (Create)** — camera (photo/video, filter carousel bakes **photos** via
   Skia, §6), Camera/Upload/**Text** modes. Review screen: **OverlayEditor**
   (draggable text-on-shape), **🎵 Music** (picker: shared library + upload from
@@ -141,11 +149,12 @@ music (`source:catalog`) + text-background uploads.
   catalog sounds + text backgrounds (long-press to remove).
 - **Profile, Inbox/DMs, ErrorBoundary** — unchanged from prior.
 
-**A FRESH APK IS NEEDED** — the app now has native modules not in the user's last
-build: `@shopify/react-native-skia`, `react-native-reanimated`,
-`react-native-worklets` (Stage-1 filters; reanimated/worklets currently unused but
-kept), `expo-audio`, `expo-document-picker`, `expo-asset`, **`expo-linear-gradient`**,
-`expo-dev-client`. One build carries the ENTIRE session's work.
+**Building the APK.** This session's app changes are **JS-only — no new native
+modules** (720p uses an existing `expo-camera` prop; gallery-reject uses existing
+`expo-image-picker`; music volume/preview use existing `expo-audio`). So a rebuild
+just carries the new JS; it needs the same native base as the prior build
+(`@shopify/react-native-skia`, `react-native-reanimated`/`-worklets`, `expo-audio`,
+`expo-document-picker`, `expo-asset`, `expo-linear-gradient`, `expo-dev-client`).
 ```
 cd /d D:\MidPay\app
 set "NODE_OPTIONS=--tls-max-v1.2"
@@ -155,9 +164,11 @@ npx eas-cli build -p android --profile preview
 native crash. Download tip: phone over mobile data, or disable Chrome QUIC — the
 eascdn download resets otherwise.)
 
-**Owner's onboarding after install:** Create account with **0770546489** + a
-password → run the `is_admin=1 WHERE phone='+256770546489'` D1 command → restart →
-Admin button appears.
+**Owner account** — `0770546489` (stored `+256770546489`), handle `user_f15f85d8`,
+**already `is_admin=1`** (in-app Admin button works). The **staff console** (§5a)
+is separate: log in at `/console` as `kissakian@gmail.com` (super_admin, no TOTP
+yet). To grant in-app admin to another number:
+`wrangler d1 execute midpay --remote --command "UPDATE users SET is_admin=1 WHERE phone='+2567XXXXXXXX'"`.
 
 ---
 
@@ -215,28 +226,25 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
   moderation deep-link from a reported target to its content/creator.
 - **Search follow-ups** — sound results aren't tappable (no "posts using this
   sound" screen); comment match is a substring (the "3 words" was simplified).
-- **Music follow-ups** — "original sound" extracted from a video's own audio;
-  trim/volume on video music (`musicEndMs` wired but video uses cap-to-clip).
+- **Music follow-ups** — music **volume DONE** (per-post `musicVolume`, ducks
+  under narration). Remaining: "original sound" extracted from a video's own
+  audio; per-segment trim on video music (`musicEndMs` wired but video uses
+  cap-to-clip); an optional **"mute original audio" toggle** (offered to owner)
+  to restore music-replaces-clip for music-video posts.
 - **T&C — record acceptance server-side.** Signup now shows + gates on a Terms
   modal, but acceptance is client-only. For enforceability, add
   `users.termsVersion`/`termsAcceptedAt` and have `POST /auth/signup` accept the
   version. Terms text ([`app/src/terms.ts`](app/src/terms.ts)) is a DRAFT from
   the brief's economics — have a Ugandan lawyer review before launch.
-- **Free-content allowance (§4.5.3) — BUILT + verified 2026-07-25.** Owner
-  reversed the earlier "unlimited free" call for a strict launch budget
-  ([[open-signup-model]]): **100 free video-minutes per creator; paid unlimited.**
-  `FREE_CONTENT_MINUTES` config (default 100, admin-tunable, 0=disabled),
-  `content.repo.sumFreeVideoSeconds`, enforced in `content.service` create + the
-  paid→free update path (error `free_minutes_exhausted`, 422; detail carries
-  used/remaining). Only videos consume it; photos/text don't. Still separate from
-  the per-clip 5-min (300s) cap. NOT yet built: per-standing multipliers, free-
-  upload rate limit (the rest of §4.5.3) — add only if abuse shows up.
-- **Video quality cap = 720p.** Camera records at **720p** (`videoQuality` prop on
-  `CameraView`; falls back to device max if unavailable). Gallery uploads: a
-  picked video whose **shorter side > 720** is **rejected** with a message (can't
-  downscale on-device — no server transcode). Photos unaffected (`quality:0.9`).
-  If a transcode service is added later, swap the reject for a downscale step.
-- **Polish backlog** — locked-paid-video poster; pull-to-refresh niceties.
+- **Free-video cap — DONE** (§4/§8): 100 min/creator, enforced + verified. Not
+  yet built (the rest of §4.5.3): per-standing multipliers, free-upload rate
+  limit — add only if abuse shows up. `showRemaining` allowance in the create UI
+  was offered but not built; wire `/content/allowance`-style read if wanted.
+- **720p cap — DONE** (§8): camera records 720p; gallery videos >720p rejected.
+  Optional upgrade: add a transcode service to *downscale* instead of reject.
+- **T&C — record acceptance server-side (still pending, see above).**
+- **Polish backlog** — locked-paid-video poster; pull-to-refresh niceties;
+  surface "free minutes remaining" to creators in Studio.
 
 ---
 
@@ -262,8 +270,16 @@ per-use = Flutterwave 3%/sale + live streaming free tier.
 
 - **Auth = mobile number + password** (changed 2026-07-24 from phone OTP, at
   owner's request; removes the SMS dependency).
-- **Open signup** — no approval/KYC gate; free unlimited uploads
-  ([[open-signup-model]]).
+- **Open signup** — no approval/KYC gate to post ([[open-signup-model]]). BUT
+  free video is **capped at 100 min/creator** (reversed the earlier "unlimited",
+  2026-07-25, for launch budget); **paid videos unlimited**.
+- **Price floors are floors, not caps** — paid **photos ≥ 2,000**, paid
+  **videos/text ≥ 5,000**; creators may set any higher price. 70/30 recorded
+  split applies at any price (§3.2). Live floor scales with duration (§3.3).
+- **Max quality = 720p.** Camera records at 720p; gallery videos above 720p are
+  rejected (no server transcode to downscale). Allowed: 720/480/360 and below.
+- **Music does NOT replace the clip's own audio** — it layers UNDER it at the
+  creator-set `musicVolume`, so tutorial narration stays audible (2026-07-26).
 - **Payout number = registration number.**
 - **`@username` unique; display name NOT** (two "Coach Emma"s allowed).
 - **Compose-at-playback** for overlays + music + text backgrounds — metadata
@@ -279,6 +295,7 @@ per-use = Flutterwave 3%/sale + live streaming free tier.
 Backend (src/)
   index.ts                     Worker entry + cron scheduled handler
   http/{app,container}.ts      Hono app + DI composition root (wire new services here)
+  http/console.html            admin web console SPA (served at /console; §5a)
   http/routes/*                auth, users, creators, content, music, backgrounds,
                                search, live, payments, reports, admin, messages
   services/*                   business logic; auth.service.ts (signup/login +
@@ -289,7 +306,7 @@ Backend (src/)
                                +textStyle,+music*), music, backgrounds, social
                                (+comment_likes,+comments.likeCount), live, ledger…
   realtime/live-room.ts        LiveRoom Durable Object
-  drizzle/migrations/          0000–0008 (all applied remote)
+  drizzle/migrations/          0000–0009 (all applied remote)
 
 App (app/src/)
   screens/*                    Feed, Studio, UserProfile, PostViewer, Inbox,
@@ -301,8 +318,9 @@ App (app/src/)
                                skiaFilter.ts (REAL photo baking, not a stub) +
                                textStyles.ts (bg/font/colour presets)
   api.ts                       typed backend client (auth, content, music,
-                               backgrounds, search, comments…)
+                               backgrounds, search, comments, getPricing…)
   auth.tsx                     session/token context (login/signup password)
+  terms.ts                     T&C draft + TERMS_VERSION (shown at signup)
 ```
 
 ---
@@ -311,3 +329,4 @@ App (app/src/)
 
 [[midpay-backend-status]] · [[open-signup-model]] · [[node-tls13-reset-workaround]]
 · [[stage2-live-filters-deferred]] · [[music-feature-design]] · [[in-app-admin]]
+· [[admin-web-console]]
