@@ -15,6 +15,13 @@ import CommentsSheet from "../components/CommentsSheet";
 import FeedItemView from "../components/FeedItemView";
 import { colors } from "../theme";
 
+// Hold a loaded video decoder only for the active cell + the next one ahead
+// (2 at most), releasing the rest. Preloading the next keeps swipes instant,
+// while the low cap avoids exhausting the few hardware decoders on cheap phones.
+// Bump PRELOAD_BEHIND to 1 to also keep the previous clip ready (3 decoders).
+const PRELOAD_AHEAD = 1;
+const PRELOAD_BEHIND = 0;
+
 export default function FeedScreen({ navigation }: { navigation: any }) {
   const { height } = useWindowDimensions();
   // The feed lives inside the tab navigator; the list height is the window
@@ -77,6 +84,7 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
           <FeedItemView
             item={item}
             active={index === activeIndex}
+            preload={index >= activeIndex - PRELOAD_BEHIND && index <= activeIndex + PRELOAD_AHEAD}
             height={listHeight}
             onOpenComments={setCommentsFor}
             onMessageCreator={(it) =>

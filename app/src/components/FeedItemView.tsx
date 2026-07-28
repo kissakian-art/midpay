@@ -38,6 +38,9 @@ import TextOverlayLayer from "./TextOverlayLayer";
 interface Props {
   item: FeedItem;
   active: boolean;
+  /** True when this cell is the active one or within the preload window, so it
+   *  should hold a loaded video decoder. False = release the decoder. */
+  preload: boolean;
   height: number;
   onOpenComments: (item: FeedItem) => void;
   onMessageCreator: (item: FeedItem) => void;
@@ -75,6 +78,7 @@ function mmss(sec: number): string {
 export default function FeedItemView({
   item,
   active,
+  preload,
   height,
   onOpenComments,
   onMessageCreator,
@@ -118,6 +122,13 @@ export default function FeedItemView({
 
   useEffect(() => {
     if (!unlocked || item.kind !== "video") return;
+    // Outside the preload window: release the decoder (MediaCodec) so low-end
+    // devices don't exhaust their few hardware decoders. Re-loads when the cell
+    // scrolls back into the window (active or the next one up).
+    if (!preload) {
+      player.replaceAsync(null).catch(() => {});
+      return;
+    }
     // Play a locally-cached copy when we have one (no network, no auth header);
     // otherwise stream and let it be cached in the background for next time.
     const cached = getCachedUri(item.id);
@@ -125,7 +136,7 @@ export default function FeedItemView({
       ? { uri: cached }
       : { uri: mediaUrl(item.id), headers: authHeaders() };
     player.replaceAsync(source).catch(() => {});
-  }, [unlocked, item.id, item.kind, player]);
+  }, [unlocked, item.id, item.kind, player, preload]);
 
   // Cache a FREE video the first time it actually gets watched (becomes the
   // active cell), so repeat views skip the network. Paid videos are never

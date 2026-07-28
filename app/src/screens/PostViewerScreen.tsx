@@ -26,6 +26,7 @@ export default function PostViewerScreen({ route, navigation }: any) {
       <FeedItemView
         item={item}
         active
+        preload
         height={height}
         onOpenComments={setCommentsFor}
         onMessageCreator={(it) =>
