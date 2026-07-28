@@ -1,4 +1,3 @@
-import * as DocumentPicker from "expo-document-picker";
 import * as ImagePicker from "expo-image-picker";
 import React, { useEffect, useState } from "react";
 import {
@@ -8,18 +7,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
 import {
   backgroundImageUrl,
   createBackground,
-  createTrack,
   deleteBackground,
   listBackgrounds,
   uploadBackgroundImage,
-  uploadTrackAudio,
 } from "../api";
 import { useAuth } from "../auth";
 import { colors } from "../theme";
@@ -31,7 +27,6 @@ import { colors } from "../theme";
 export default function AdminScreen() {
   const { user } = useAuth();
   const [busy, setBusy] = useState<string | null>(null);
-  const [soundTitle, setSoundTitle] = useState("");
   const [bgs, setBgs] = useState<string[]>([]);
 
   const loadBgs = () =>
@@ -47,24 +42,6 @@ export default function AdminScreen() {
       </View>
     );
   }
-
-  const uploadSound = async () => {
-    try {
-      const res = await DocumentPicker.getDocumentAsync({ type: "audio/*", copyToCacheDirectory: true });
-      if (res.canceled || !res.assets?.[0]) return;
-      const a = res.assets[0];
-      setBusy("Uploading sound…");
-      const title = soundTitle.trim() || (a.name || "Catalog sound").replace(/\.[^/.]+$/, "").slice(0, 120);
-      const { track } = await createTrack({ title, source: "catalog" });
-      await uploadTrackAudio(track.id, a.uri, a.mimeType || "audio/mpeg");
-      setSoundTitle("");
-      Alert.alert("Added", "Catalog sound is now available to all creators.");
-    } catch (e) {
-      Alert.alert("Failed", e instanceof Error ? e.message : "Try again");
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const uploadBackground = async () => {
     try {
@@ -99,20 +76,7 @@ export default function AdminScreen() {
 
   return (
     <ScrollView style={s.root} contentContainerStyle={{ padding: 18, paddingBottom: 40 }}>
-      <Text style={s.section}>Catalog sound</Text>
-      <Text style={s.hint}>Upload official sounds every creator can add to their posts.</Text>
-      <TextInput
-        style={s.input}
-        placeholder="Title (optional)"
-        placeholderTextColor={colors.dim}
-        value={soundTitle}
-        onChangeText={setSoundTitle}
-      />
-      <TouchableOpacity style={s.btn} onPress={uploadSound} disabled={!!busy}>
-        <Text style={s.btnText}>⬆  Upload sound</Text>
-      </TouchableOpacity>
-
-      <Text style={[s.section, { marginTop: 26 }]}>Text backgrounds</Text>
+      <Text style={s.section}>Text backgrounds</Text>
       <Text style={s.hint}>Upload image backgrounds for text posts, available to all creators.</Text>
       <TouchableOpacity style={s.btn} onPress={uploadBackground} disabled={!!busy}>
         <Text style={s.btnText}>⬆  Upload background</Text>
@@ -143,14 +107,6 @@ const s = StyleSheet.create({
   denied: { color: colors.dim },
   section: { color: colors.text, fontWeight: "800", fontSize: 16 },
   hint: { color: colors.dim, fontSize: 13, marginTop: 4, marginBottom: 10 },
-  input: {
-    backgroundColor: colors.card,
-    color: colors.text,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
   btn: {
     backgroundColor: colors.accent,
     borderRadius: 12,

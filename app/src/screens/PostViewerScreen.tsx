@@ -35,20 +35,6 @@ export default function PostViewerScreen({ route, navigation }: any) {
           })
         }
         onOpenProfile={(it) => navigation.navigate("UserProfile", { userId: it.creatorUserId })}
-        onUseSound={(it) =>
-          navigation.navigate("Main", {
-            screen: "UploadTab",
-            params: {
-              reuseSound: {
-                id: it.musicTrackId,
-                title: "Sound",
-                artist: null,
-                source: it.musicSource ?? "catalog",
-                durationSeconds: it.musicDurationSeconds ?? null,
-              },
-            },
-          })
-        }
       />
 
       <TouchableOpacity style={s.back} onPress={() => navigation.goBack()}>

@@ -1,5 +1,4 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useAudioPlayer } from "expo-audio";
 import * as ScreenCapture from "expo-screen-capture";
 import { useVideoPlayer, VideoView, type VideoSource } from "expo-video";
 import React, { useEffect, useRef, useState } from "react";
@@ -25,7 +24,6 @@ import {
   follow,
   like,
   mediaUrl,
-  musicAudioUrl,
   unfollow,
   unlike,
   type FeedItem,
@@ -44,7 +42,6 @@ interface Props {
   onOpenComments: (item: FeedItem) => void;
   onMessageCreator: (item: FeedItem) => void;
   onOpenProfile: (item: FeedItem) => void;
-  onUseSound: (item: FeedItem) => void;
 }
 
 const SCRUB_MARGIN = 12;
@@ -82,7 +79,6 @@ export default function FeedItemView({
   onOpenComments,
   onMessageCreator,
   onOpenProfile,
-  onUseSound,
 }: Props) {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
@@ -114,28 +110,11 @@ export default function FeedItemView({
 
   const player = useVideoPlayer(null, (p) => {
     p.loop = true;
-    // The clip stays UNMUTED (narration must be audible), so its audio must be
-    // told to MIX with the separate music player. The default 'auto' lets other
-    // audio play only while this player is muted — which killed the music track
-    // and left "only one plays" after returning from background. (expo-video)
-    p.audioMixingMode = "mixWithOthers";
   });
 
   const isVideo = unlocked && item.kind === "video";
-  // Music can back ANY post kind (video / photo / text) — composed at playback.
-  const hasMusic = unlocked && !!item.musicTrackId;
-  const audio = useAudioPlayer(hasMusic ? { uri: musicAudioUrl(item.musicTrackId as string) } : null);
-
-  // Controls apply to anything playable: a video, OR a photo/text with music.
-  const hasControls = isVideo || hasMusic;
-
-  // Music segment [startSec, endSec). For photo/text the segment length is the
-  // post's play duration; for video the music is capped to the video length.
-  const startSec = (item.musicStartMs ?? 0) / 1000;
-  const endSec = item.musicEndMs != null ? item.musicEndMs / 1000 : null;
-  const segLen = endSec != null ? Math.max(0.1, endSec - startSec) : 0;
-  // Music loudness 0..1 (NULL = full). Lets tutorials duck music under narration.
-  const musicVol = Math.max(0, Math.min(1, (item.musicVolume ?? 100) / 100));
+  // Only a video is playable (has its own audio); photos/text are static.
+  const hasControls = isVideo;
 
   useEffect(() => {
     if (!unlocked || item.kind !== "video") return;
@@ -158,23 +137,13 @@ export default function FeedItemView({
     cacheVideo(item.id).catch(() => {});
   }, [active, unlocked, item.kind, item.pricing, item.id]);
 
-  // Keep the clip's OWN audio (narration) audible; the music is layered under it
-  // at the creator-set volume rather than replacing it, so tutorials work.
+  // Keep the clip's own audio audible.
   useEffect(() => {
     player.muted = false;
   }, [player]);
 
-  useEffect(() => {
-    if (!hasMusic) return;
-    try {
-      audio.volume = musicVol;
-    } catch {
-      // player released
-    }
-  }, [audio, hasMusic, musicVol]);
-
   // On screen = the active cell AND the screen is focused AND the app is in the
-  // foreground. This is what actually gates audio/video playback.
+  // foreground. This is what actually gates video playback.
   const onScreen = active && isFocused && appActive;
   const playing = onScreen && unlocked && !paused;
 
@@ -190,55 +159,17 @@ export default function FeedItemView({
     if (!active) setPaused(false);
   }, [active]);
 
-  // Seek music to the segment start when the cell first becomes active.
+  // Returning on-screen (from background or another screen) can leave the video
+  // paused; re-assert play when we come back — twice, since the OS sometimes
+  // settles a beat after the first play() call.
   useEffect(() => {
-    if (active && hasMusic) {
-      try {
-        audio.seekTo(startSec).catch(() => {});
-      } catch {
-        // not ready
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, hasMusic]);
-
-  useEffect(() => {
-    if (!hasMusic) return;
-    // expo-audio releases the player on unmount / source clear, so we never
-    // pause in cleanup; all calls are guarded since the shared native object can
-    // be released under us as cells recycle.
-    try {
-      audio.loop = true;
-      if (playing) audio.play();
-      else audio.pause();
-    } catch {
-      // already released
-    }
-  }, [playing, hasMusic, audio]);
-
-  // Returning on-screen (from background or another screen) makes Android
-  // re-arbitrate audio focus, which could resume only ONE of the two players.
-  // Re-assert BOTH together when we come back — twice, since the OS sometimes
-  // grabs focus a beat after the first play() call.
-  useEffect(() => {
-    if (!onScreen || !unlocked || paused) return;
+    if (!onScreen || !unlocked || paused || !isVideo) return;
     let cancelled = false;
     const reassert = () => {
       if (cancelled) return;
       try {
-        if (isVideo) {
-          player.muted = false;
-          player.play();
-        }
-      } catch {
-        // player released
-      }
-      try {
-        if (hasMusic) {
-          audio.volume = musicVol;
-          audio.loop = true;
-          audio.play();
-        }
+        player.muted = false;
+        player.play();
       } catch {
         // player released
       }
@@ -249,43 +180,28 @@ export default function FeedItemView({
       cancelled = true;
       clearTimeout(t);
     };
-  }, [onScreen, unlocked, paused, isVideo, hasMusic, player, audio, musicVol]);
+  }, [onScreen, unlocked, paused, isVideo, player]);
 
-  // Poll position for the scrubber and loop the music segment.
+  // Poll the video position for the scrubber.
   useEffect(() => {
-    if (!hasControls || !onScreen) return;
+    if (!isVideo || !onScreen) return;
     const id = setInterval(() => {
       if (scrubbing.current) return;
       try {
-        if (isVideo) {
-          const cur = player.currentTime || 0;
-          // On each video loop restart the music so it never runs past the video.
-          if (hasMusic && cur + 0.4 < lastVideoPos.current) {
-            audio.seekTo(startSec).catch(() => {});
-          }
-          lastVideoPos.current = cur;
-          if (player.duration) setDuration(player.duration);
-          setPosition(cur);
-        } else if (hasMusic) {
-          const cur = audio.currentTime || 0;
-          if (endSec != null && cur >= endSec) {
-            audio.seekTo(startSec).catch(() => {});
-            setPosition(0);
-          } else {
-            setPosition(Math.max(0, cur - startSec));
-          }
-          setDuration(segLen || Math.max(0.1, (audio.duration || 0) - startSec));
-        }
+        const cur = player.currentTime || 0;
+        lastVideoPos.current = cur;
+        if (player.duration) setDuration(player.duration);
+        setPosition(cur);
       } catch {
-        // players not ready
+        // player not ready
       }
     }, 250);
     return () => clearInterval(id);
-  }, [hasControls, onScreen, isVideo, hasMusic, player, audio, startSec, endSec, segLen]);
+  }, [isVideo, onScreen, player]);
 
   // Scrubber drag → seek. Latest-ref so the one-time PanResponder isn't stale.
-  const scrubState = useRef({ player, audio, isVideo, hasMusic, startSec, endSec, duration, width });
-  scrubState.current = { player, audio, isVideo, hasMusic, startSec, endSec, duration, width };
+  const scrubState = useRef({ player, isVideo, duration, width });
+  scrubState.current = { player, isVideo, duration, width };
   const scrub = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -302,19 +218,7 @@ export default function FeedItemView({
         try {
           if (st.isVideo) {
             st.player.currentTime = t;
-            // A video WITH music: move the music to match, so the two stay in
-            // sync after seeking (music runs alongside the video from startSec;
-            // wraps if the track is shorter than the clip). Keep lastVideoPos in
-            // step so the loop-detector doesn't treat a backward seek as a loop.
-            if (st.hasMusic) {
-              const musicEnd = st.endSec != null ? st.endSec : st.audio.duration || 0;
-              const avail = musicEnd - st.startSec;
-              const mt = avail > 0 ? st.startSec + (t % avail) : st.startSec + t;
-              st.audio.seekTo(mt).catch(() => {});
-            }
             lastVideoPos.current = t;
-          } else if (st.hasMusic) {
-            st.audio.seekTo(st.startSec + t).catch(() => {});
           }
         } catch {
           // ignore
@@ -454,13 +358,6 @@ export default function FeedItemView({
         {item.pricing === "paid" && unlocked ? (
           <Text style={s.ownedBadge}>Purchased ✓</Text>
         ) : null}
-        {/* Reuse-sound shortcut — only on FREE videos that carry a sound. Tapping
-            takes the viewer to the studio with this track ready to film to. */}
-        {item.kind === "video" && item.pricing === "free" && item.musicTrackId ? (
-          <TouchableOpacity style={s.soundBtn} onPress={() => onUseSound(item)} activeOpacity={0.8}>
-            <Text style={s.soundText} numberOfLines={1}>🎵  Use sound</Text>
-          </TouchableOpacity>
-        ) : null}
       </View>
 
       {/* Right rail: actions */}
@@ -572,20 +469,6 @@ const s = StyleSheet.create({
   handle: { color: colors.text, fontWeight: "800", fontSize: 16 },
   title: { color: colors.text, marginTop: 4 },
   ownedBadge: { color: colors.success, marginTop: 6, fontWeight: "700", fontSize: 12 },
-  soundBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    alignSelf: "flex-start",
-    maxWidth: "100%",
-    marginTop: 10,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  soundText: { color: "#fff", fontWeight: "700", fontSize: 12, flexShrink: 1 },
   rail: { position: "absolute", right: 10, bottom: 100, alignItems: "center", gap: 18 },
   action: { alignItems: "center" },
   actionIcon: {

@@ -73,15 +73,6 @@ export interface TextOverlay {
   bg: string | null; // shape background colour, or null for none
 }
 
-/** A reusable audio track a post can play over its media. */
-export interface Track {
-  id: string;
-  title: string;
-  artist: string | null;
-  source: "device" | "catalog";
-  durationSeconds: number | null;
-}
-
 /** Visual style for a text post (gradient/solid background + styled caption). */
 export interface TextStyle {
   bg: string[];
@@ -99,16 +90,6 @@ export interface FeedItem {
   description: string | null;
   overlays?: TextOverlay[] | null;
   textStyle?: TextStyle | null;
-  musicTrackId?: string | null;
-  musicStartMs?: number | null;
-  musicEndMs?: number | null;
-  musicVolume?: number | null;
-  /** Attached sound's public details (null when the post has no music) — used
-   *  to label the "use this sound" shortcut and hand the track to the studio. */
-  musicTitle?: string | null;
-  musicArtist?: string | null;
-  musicSource?: "device" | "catalog" | null;
-  musicDurationSeconds?: number | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */
@@ -238,29 +219,11 @@ export const createContent = (input: {
   durationSeconds?: number;
   overlays?: TextOverlay[];
   textStyle?: TextStyle;
-  musicTrackId?: string;
-  musicStartMs?: number;
-  musicEndMs?: number;
-  musicVolume?: number;
 }) => req<{ content: { id: string } }>("/content", { method: "POST", json: input });
 
 /** Paid-content price floors (photos have a lower floor than videos). */
 export const getPricing = () =>
   req<{ recordedFloor: number; photoFloor: number }>("/content/pricing");
-
-// --- Music ---
-/** Public audio URL for a track (streamed straight to the player). */
-export const musicAudioUrl = (trackId: string) => `${API_URL}/music/tracks/${trackId}/audio`;
-
-export const listTracks = (q?: string) =>
-  req<{ tracks: Track[] }>(`/music/tracks${q ? `?q=${encodeURIComponent(q)}` : ""}`);
-
-export const createTrack = (input: {
-  title: string;
-  artist?: string;
-  durationSeconds?: number;
-  source?: "catalog";
-}) => req<{ track: Track }>("/music/tracks", { method: "POST", json: input });
 
 // --- Text backgrounds (admin-uploaded catalog) ---
 export const backgroundImageUrl = (id: string) => `${API_URL}/backgrounds/${id}/image`;
@@ -271,17 +234,6 @@ export async function uploadBackgroundImage(id: string, fileUri: string, content
   const res = await putFile(`${API_URL}/backgrounds/${id}/image`, fileUri, contentType);
   if (res.status < 200 || res.status >= 300) {
     throw new ApiError(res.status, "upload_failed", "Background upload failed");
-  }
-}
-
-export async function uploadTrackAudio(
-  trackId: string,
-  fileUri: string,
-  contentType: string,
-): Promise<void> {
-  const res = await putFile(`${API_URL}/music/tracks/${trackId}/audio`, fileUri, contentType);
-  if (res.status < 200 || res.status >= 300) {
-    throw new ApiError(res.status, "upload_failed", "Audio upload failed");
   }
 }
 

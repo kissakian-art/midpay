@@ -1,4 +1,3 @@
-import { useAudioPlayer } from "expo-audio";
 import {
   CameraView,
   useCameraPermissions,
@@ -28,15 +27,12 @@ import {
   createContent,
   getPricing,
   listBackgrounds,
-  musicAudioUrl,
   publishContent,
   uploadMedia,
   uploadThumbnail,
 } from "../api";
 import { Image as RNImage } from "react-native";
 import OverlayEditor from "../components/OverlayEditor";
-import MusicPicker from "../components/MusicPicker";
-import MusicTrimmer from "../components/MusicTrimmer";
 import TextBackground from "../components/TextBackground";
 import { colors } from "../theme";
 import { FILTER_GROUPS, NONE, type Filter, type FilterGroup } from "../studio/filters";
@@ -48,7 +44,7 @@ import {
   TEXT_COLORS,
   TEXT_FONTS,
 } from "../studio/textStyles";
-import { type TextOverlay, type TextStyle, type Track } from "../api";
+import { type TextOverlay, type TextStyle } from "../api";
 
 const MAX_SECONDS = 300; // §4.3 five-minute clip cap
 
@@ -75,31 +71,6 @@ const DEFAULT_FLOORS = { recordedFloor: 5000, photoFloor: 2000 };
 function clampPrice(text: string, floor: number): number {
   const n = parseInt(text, 10);
   return Number.isFinite(n) && n >= floor ? n : floor;
-}
-
-const VOLUME_STEPS = [0, 25, 50, 75, 100];
-
-/** Music loudness presets (0..100) — lets a creator duck background music under
- *  a video's own narration so tutorials aren't overwhelmed. */
-function VolumeControls({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  return (
-    <View style={s.volumeWrap}>
-      <Text style={s.volumeLabel}>🔊  Music volume · {value}%</Text>
-      <View style={s.volumeRow}>
-        {VOLUME_STEPS.map((v) => (
-          <TouchableOpacity
-            key={v}
-            style={[s.volPill, value === v && s.volPillActive]}
-            onPress={() => onChange(v)}
-          >
-            <Text style={[s.volPillText, value === v && s.volPillTextActive]}>
-              {v === 0 ? "Mute" : `${v}%`}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-    </View>
-  );
 }
 
 /** Free / Paid toggle + (when paid) a creator-set price field. Used by both the
@@ -169,7 +140,7 @@ async function makeVideoThumbnail(videoUri: string): Promise<string | null> {
   }
 }
 
-export default function StudioScreen({ navigation, route }: { navigation: any; route: any }) {
+export default function StudioScreen({ navigation }: { navigation: any }) {
   const [camPerm, requestCam] = useCameraPermissions();
   const [, requestMic] = useMicrophonePermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -186,30 +157,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
 
   const [capture, setCapture] = useState<Capture | null>(null);
   const [overlays, setOverlays] = useState<TextOverlay[]>([]);
-  const [music, setMusic] = useState<Track | null>(null);
-  const [musicStart, setMusicStart] = useState(0);
-  const [musicEnd, setMusicEnd] = useState<number | null>(null);
-  const [musicVolume, setMusicVolume] = useState(100); // 0..100 playback loudness
-  const [musicOpen, setMusicOpen] = useState(false);
-
-  // Lip-sync mode: a song chosen BEFORE recording that plays out loud while the
-  // camera films (video-only, no mic — see toggleRecord), then auto-attaches to
-  // the post so the clean track plays over the video at playback (TikTok-style).
-  const [camSong, setCamSong] = useState<Track | null>(null);
-  const [camSongOpen, setCamSongOpen] = useState(false);
-  const camAudio = useAudioPlayer(camSong ? { uri: musicAudioUrl(camSong.id) } : null);
-
-  // Arriving from a feed "use this sound" tap: drop straight into lip-sync mode
-  // with that track loaded, then clear the param so it doesn't re-fire.
-  const reuseSound = route?.params?.reuseSound as Track | undefined;
-  useEffect(() => {
-    if (!reuseSound?.id) return;
-    setCreateMode("camera");
-    setMode("video");
-    setCamSong(reuseSound);
-    navigation.setParams({ reuseSound: undefined });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reuseSound?.id]);
   const [floors, setFloors] = useState(DEFAULT_FLOORS);
 
   // Live price floors (photo floor is lower than video). Backend re-validates.
@@ -262,33 +209,9 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
     );
   }
 
-  // Choosing a track resets its segment; the trimmer re-seeds a default.
-  const selectMusic = (t: Track | null) => {
-    setMusic(t);
-    setMusicStart(0);
-    setMusicEnd(null);
-  };
-
-  // Music fields for createContent. Video omits musicEndMs (capped to the video
-  // at playback); photo/text carry the trimmed [start, end] segment.
-  const musicParams = () =>
-    music
-      ? {
-          musicTrackId: music.id,
-          musicStartMs: musicStart,
-          musicVolume,
-          ...(musicEnd != null ? { musicEndMs: musicEnd } : {}),
-        }
-      : {};
-
-  // Open a fresh review with no leftover overlays/music from a previous take.
-  // A lip-sync take passes `seedSong` so the song it was filmed to is already
-  // attached as the post's music (from the start, so it aligns with the video).
-  const openCapture = (c: Capture, seedSong: Track | null = null) => {
+  // Open a fresh review with no leftover overlays from a previous take.
+  const openCapture = (c: Capture) => {
     setOverlays([]);
-    if (seedSong) selectMusic(seedSong);
-    else selectMusic(null);
-    setMusicVolume(100);
     // Seed the price at the floor for this kind (photo floor is lower).
     setPriceText(String(c.kind === "photo" ? floors.photoFloor : floors.recordedFloor));
     setCapture(c);
@@ -296,7 +219,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
   const closeReview = () => {
     setCapture(null);
     setOverlays([]);
-    selectMusic(null);
   };
 
   const takePhoto = async () => {
@@ -326,40 +248,19 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
       Alert.alert("Camera not ready", "Give it a moment and try again.");
       return;
     }
-    // Lip-sync take: no mic needed — we film video-only (the CameraView `mute`
-    // prop) so no recording audio session opens. That's what lets the song keep
-    // playing out loud during capture (Android pauses playback the moment a mic
-    // session starts). The clean track is attached to the post instead.
-    const lipSync = !!camSong;
-    if (!lipSync) {
-      const mic = await requestMic();
-      if (!mic.granted) {
-        Alert.alert("Microphone needed", "Allow microphone access to record video with sound.");
-        return;
-      }
+    const mic = await requestMic();
+    if (!mic.granted) {
+      Alert.alert("Microphone needed", "Allow microphone access to record video with sound.");
+      return;
     }
     setRecording(true);
-    if (lipSync) {
-      try {
-        camAudio.loop = true;
-        camAudio.seekTo(0).catch(() => {});
-        camAudio.play();
-      } catch {
-        // best-effort; recording still proceeds silently if playback fails
-      }
-    }
     try {
       const rec = await cameraRef.current?.recordAsync({ maxDuration: MAX_SECONDS });
-      if (rec?.uri) openCapture({ uri: rec.uri, kind: "video", filtered: false }, camSong);
+      if (rec?.uri) openCapture({ uri: rec.uri, kind: "video", filtered: false });
       else Alert.alert("Recording failed", "No video was produced. Try again.");
     } catch (e) {
       Alert.alert("Recording failed", e instanceof Error ? e.message : "Try again");
     } finally {
-      try {
-        camAudio.pause();
-      } catch {
-        // released
-      }
       setRecording(false);
     }
   };
@@ -423,7 +324,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
             }
           : {}),
         ...(overlays.length ? { overlays } : {}),
-        ...musicParams(),
       });
       setBusy("Uploading…");
       await uploadMedia(
@@ -464,13 +364,11 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
         pricing: paid ? "paid" : "free",
         ...(paid ? { priceUgx: clampPrice(priceText, floors.recordedFloor) } : {}),
         textStyle,
-        ...musicParams(),
       });
       await publishContent(content.id);
       setBusy(null);
       setTextBody("");
       setTextStyle(DEFAULT_TEXT_STYLE);
-      selectMusic(null);
       setCreateMode("camera");
       Alert.alert("Posted!", "Your text post is live on the feed.");
       navigation.navigate("FeedTab");
@@ -597,35 +495,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
           </TouchableOpacity>
         </ScrollView>
 
-        <View style={s.composerPad}>
-          <TouchableOpacity style={s.musicBtn} onPress={() => setMusicOpen(true)}>
-            <Text style={s.musicBtnText} numberOfLines={1}>
-              {music ? `🎵  ${music.title}` : "🎵  Add music (optional)"}
-            </Text>
-            {music ? (
-              <TouchableOpacity onPress={() => selectMusic(null)} hitSlop={10}>
-                <Text style={s.musicClear}>✕</Text>
-              </TouchableOpacity>
-            ) : (
-              <Text style={s.musicChevron}>›</Text>
-            )}
-          </TouchableOpacity>
-          {music ? (
-            <>
-              <MusicTrimmer
-                trackId={music.id}
-                startMs={musicStart}
-                endMs={musicEnd}
-                onChange={(sMs, eMs) => {
-                  setMusicStart(sMs);
-                  setMusicEnd(eMs);
-                }}
-              />
-              <VolumeControls value={musicVolume} onChange={setMusicVolume} />
-            </>
-          ) : null}
-        </View>
-
         <PriceControls
           paid={paid}
           setPaid={setPaid}
@@ -642,13 +511,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
           {busy ? <ActivityIndicator color="#000" /> : <Text style={s.primaryBtnText}>Post</Text>}
         </TouchableOpacity>
         {modeStrip}
-
-        <MusicPicker
-          visible={musicOpen}
-          currentTrackId={music?.id ?? null}
-          onSelect={selectMusic}
-          onClose={() => setMusicOpen(false)}
-        />
       </KeyboardAvoidingView>
     );
   }
@@ -661,32 +523,11 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
         style={StyleSheet.absoluteFill}
         facing={facing}
         mode={mode}
-        // Lip-sync: filming to a chosen song records video-ONLY (no mic), so the
-        // song can keep playing out loud and there's no tinny mic-captured double.
-        mute={!!camSong}
         // Cap recording at 720p — the platform's max quality (budget/bandwidth).
         // If the device can't do 720p, expo-camera falls back to its highest.
         videoQuality="720p"
         onCameraReady={() => setReady(true)}
       />
-
-      {/* Lip-sync: pick a song to film to (video mode only, not while recording).
-          Filming to it records video-only and attaches the clean track to the post. */}
-      {mode === "video" && !recording ? (
-        <View style={s.camSongWrap}>
-          <TouchableOpacity style={s.camSongBtn} onPress={() => setCamSongOpen(true)}>
-            <Text style={s.camSongText} numberOfLines={1}>
-              {camSong ? `🎵  ${camSong.title}` : "🎵  Add sound"}
-            </Text>
-            {camSong ? (
-              <TouchableOpacity onPress={() => setCamSong(null)} hitSlop={10}>
-                <Text style={s.camSongClear}>✕</Text>
-              </TouchableOpacity>
-            ) : null}
-          </TouchableOpacity>
-          {camSong ? <Text style={s.camSongHint}>Lip-sync · your mic is off while filming</Text> : null}
-        </View>
-      ) : null}
 
       {/* Recording indicator + timer */}
       {recording ? (
@@ -760,17 +601,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
         </View>
       ) : null}
 
-      {/* Song picker for lip-sync filming (separate from the review-screen music). */}
-      <MusicPicker
-        visible={camSongOpen}
-        currentTrackId={camSong?.id ?? null}
-        onSelect={(t) => {
-          setCamSong(t);
-          setCamSongOpen(false);
-        }}
-        onClose={() => setCamSongOpen(false)}
-      />
-
       {/* Review + post — full-bleed editor (add/drag text) above the post bar. */}
       <Modal visible={!!capture} animationType="slide" onRequestClose={closeReview}>
         <View style={s.reviewRoot}>
@@ -784,34 +614,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
           ) : null}
 
           <View style={s.reviewBar}>
-            <TouchableOpacity style={s.musicBtn} onPress={() => setMusicOpen(true)}>
-              <Text style={s.musicBtnText} numberOfLines={1}>
-                {music ? `🎵  ${music.title}` : "🎵  Add music"}
-              </Text>
-              {music ? (
-                <TouchableOpacity onPress={() => selectMusic(null)} hitSlop={10}>
-                  <Text style={s.musicClear}>✕</Text>
-                </TouchableOpacity>
-              ) : (
-                <Text style={s.musicChevron}>›</Text>
-              )}
-            </TouchableOpacity>
-
-            {/* Photos have no length of their own — pick which slice of the song plays. */}
-            {music && capture?.kind === "photo" ? (
-              <MusicTrimmer
-                trackId={music.id}
-                startMs={musicStart}
-                endMs={musicEnd}
-                onChange={(sMs, eMs) => {
-                  setMusicStart(sMs);
-                  setMusicEnd(eMs);
-                }}
-              />
-            ) : null}
-            {/* Volume applies to any media with music — key for tutorials. */}
-            {music ? <VolumeControls value={musicVolume} onChange={setMusicVolume} /> : null}
-
             <PriceControls
               paid={paid}
               setPaid={setPaid}
@@ -830,13 +632,6 @@ export default function StudioScreen({ navigation, route }: { navigation: any; r
             </View>
           </View>
         </View>
-
-        <MusicPicker
-          visible={musicOpen}
-          currentTrackId={music?.id ?? null}
-          onSelect={selectMusic}
-          onClose={() => setMusicOpen(false)}
-        />
       </Modal>
     </View>
   );
@@ -874,22 +669,6 @@ const s = StyleSheet.create({
   },
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
   recText: { color: "#fff", fontWeight: "800", fontVariant: ["tabular-nums"] },
-  camSongWrap: { position: "absolute", top: 58, alignSelf: "center", alignItems: "center", maxWidth: "80%" },
-  camSongBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    maxWidth: "100%",
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: "rgba(255,255,255,0.25)",
-  },
-  camSongText: { color: "#fff", fontWeight: "700", flexShrink: 1 },
-  camSongClear: { color: "rgba(255,255,255,0.8)", fontSize: 15, fontWeight: "800", paddingHorizontal: 2 },
-  camSongHint: { color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 5, fontWeight: "600" },
   devNote: {
     position: "absolute",
     top: 96,
@@ -981,20 +760,6 @@ const s = StyleSheet.create({
   busyText: { color: colors.text, marginTop: 12 },
   reviewRoot: { flex: 1, backgroundColor: "#000" },
   reviewBar: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 24, backgroundColor: colors.bg },
-  musicBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    backgroundColor: colors.card,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  musicBtnText: { color: colors.text, fontWeight: "700", flex: 1 },
-  musicClear: { color: colors.dim, fontSize: 15, fontWeight: "800", paddingHorizontal: 4 },
-  musicChevron: { color: colors.dim, fontSize: 20, fontWeight: "800" },
   priceRow: { flexDirection: "row", gap: 10, marginTop: 16 },
   priceInputRow: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 },
   priceCurrency: { color: colors.dim, fontWeight: "700", fontSize: 15 },
@@ -1011,20 +776,6 @@ const s = StyleSheet.create({
     fontWeight: "700",
   },
   priceHint: { color: colors.dim, fontSize: 12 },
-  volumeWrap: { marginTop: 12 },
-  volumeLabel: { color: colors.text, fontWeight: "700", fontSize: 13, marginBottom: 8 },
-  volumeRow: { flexDirection: "row", gap: 8 },
-  volPill: {
-    flex: 1,
-    paddingVertical: 9,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: "center",
-  },
-  volPillActive: { backgroundColor: colors.accent, borderColor: colors.accent },
-  volPillText: { color: colors.dim, fontWeight: "700", fontSize: 12 },
-  volPillTextActive: { color: "#000" },
   toggle: { flex: 1, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: colors.border, alignItems: "center" },
   toggleActive: { backgroundColor: colors.accent, borderColor: colors.accent },
   toggleText: { color: colors.dim, fontWeight: "700" },

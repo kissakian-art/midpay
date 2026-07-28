@@ -159,11 +159,9 @@ function Root() {
 }
 
 export default function App() {
-  // Let the music player (expo-audio) mix with a clip's own audio (expo-video)
-  // instead of interrupting it — the other half of the "only one plays" fix.
-  // playsInSilentMode so music is audible even with the ringer off (iOS).
+  // Play a video's own audio even when the ringer is off (iOS silent switch).
   useEffect(() => {
-    setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(() => {});
+    setAudioModeAsync({ playsInSilentMode: true }).catch(() => {});
   }, []);
 
   return (
