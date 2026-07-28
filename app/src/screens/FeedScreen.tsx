@@ -92,8 +92,8 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
               navigation.navigate("UploadTab", {
                 reuseSound: {
                   id: it.musicTrackId,
-                  title: it.musicTitle ?? "Original sound",
-                  artist: it.musicArtist ?? null,
+                  title: "Sound",
+                  artist: null,
                   source: it.musicSource ?? "catalog",
                   durationSeconds: it.musicDurationSeconds ?? null,
                 },

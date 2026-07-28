@@ -458,9 +458,7 @@ export default function FeedItemView({
             takes the viewer to the studio with this track ready to film to. */}
         {item.kind === "video" && item.pricing === "free" && item.musicTrackId ? (
           <TouchableOpacity style={s.soundBtn} onPress={() => onUseSound(item)} activeOpacity={0.8}>
-            <Text style={s.soundText} numberOfLines={1}>
-              🎵  {item.musicTitle ?? "Original sound"}  ·  Use this sound
-            </Text>
+            <Text style={s.soundText} numberOfLines={1}>🎵  Use sound</Text>
           </TouchableOpacity>
         ) : null}
       </View>

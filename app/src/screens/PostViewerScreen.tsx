@@ -41,8 +41,8 @@ export default function PostViewerScreen({ route, navigation }: any) {
             params: {
               reuseSound: {
                 id: it.musicTrackId,
-                title: it.musicTitle ?? "Original sound",
-                artist: it.musicArtist ?? null,
+                title: "Sound",
+                artist: null,
                 source: it.musicSource ?? "catalog",
                 durationSeconds: it.musicDurationSeconds ?? null,
               },
