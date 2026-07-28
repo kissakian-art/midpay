@@ -225,6 +225,11 @@ export const createContent = (input: {
 export const getPricing = () =>
   req<{ recordedFloor: number; photoFloor: number }>("/content/pricing");
 
+/** Creator deletes their own post. Hard delete: media is purged and buyers lose
+ *  access; the backend enforces ownership. */
+export const deleteContent = (id: string) =>
+  req<{ deleted: true }>(`/content/${id}`, { method: "DELETE" });
+
 // --- Text backgrounds (admin-uploaded catalog) ---
 export const backgroundImageUrl = (id: string) => `${API_URL}/backgrounds/${id}/image`;
 export const listBackgrounds = () => req<{ backgrounds: { id: string }[] }>("/backgrounds");

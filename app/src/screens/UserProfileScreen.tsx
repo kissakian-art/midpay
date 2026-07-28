@@ -18,6 +18,7 @@ import {
 } from "react-native";
 import {
   checkHandle,
+  deleteContent,
   follow,
   thumbnailUrl,
   profile as fetchProfile,
@@ -88,6 +89,32 @@ export default function UserProfileScreen({ route, navigation }: any) {
   }, [load]);
 
   const isSelf = prof?.isSelf ?? targetId === user?.id;
+
+  // Creators manage their own catalog: long-press a post to delete it.
+  const confirmDelete = (item: FeedItem) => {
+    Alert.alert(
+      "Delete this post?",
+      "It's removed permanently, and anyone who bought it loses access. This can't be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            const prev = posts;
+            setPosts((p) => p.filter((x) => x.id !== item.id)); // optimistic
+            setProf((pr) => (pr && pr.posts != null ? { ...pr, posts: Math.max(0, pr.posts - 1) } : pr));
+            try {
+              await deleteContent(item.id);
+            } catch (e) {
+              setPosts(prev); // revert
+              Alert.alert("Couldn't delete", e instanceof Error ? e.message : "Try again");
+            }
+          },
+        },
+      ],
+    );
+  };
 
   const toggleFollow = async () => {
     const next = !following;
@@ -264,6 +291,9 @@ export default function UserProfileScreen({ route, navigation }: any) {
           ▦ Posts{prof?.posts != null ? ` · ${prof.posts}` : ""}
         </Text>
       </View>
+      {isSelf && posts.length > 0 ? (
+        <Text style={s.manageHint}>Long-press a post to delete it</Text>
+      ) : null}
     </View>
   );
 
@@ -290,6 +320,7 @@ export default function UserProfileScreen({ route, navigation }: any) {
             style={[s.gridCell, { width: cell, height: cell * 1.4 }]}
             activeOpacity={0.85}
             onPress={() => navigation.navigate("PostViewer", { item })}
+            onLongPress={isSelf ? () => confirmDelete(item) : undefined}
           >
             {item.thumbnailR2Key ? (
               <Image
@@ -463,6 +494,7 @@ const s = StyleSheet.create({
     paddingBottom: 10,
   },
   tabActive: { color: colors.text, fontWeight: "700" },
+  manageHint: { color: colors.dim, fontSize: 11, textAlign: "center", marginTop: 8 },
   empty: { color: colors.dim, textAlign: "center", marginTop: 40 },
   gridCell: { padding: 1, backgroundColor: colors.bg },
   gridImage: { flex: 1, backgroundColor: colors.surface },
