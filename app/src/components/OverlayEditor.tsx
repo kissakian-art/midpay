@@ -43,9 +43,11 @@ interface Props {
 }
 
 /**
- * WYSIWYG text-overlay editor over a full-bleed COVER preview of the captured
- * media — the same fit the feed uses, so positions map 1:1. Overlays are stored
- * as normalized coords; drag moves them, and a bottom bar edits the selected one.
+ * WYSIWYG text-overlay editor over a preview of the captured media, using the
+ * same fit the feed uses so positions map 1:1: both photos and videos are
+ * CONTAIN (shown whole, letterboxed — no crop/zoom, 16:9 stays 16:9). Overlays
+ * are stored as normalized canvas coords; drag moves them, and a bottom bar
+ * edits the selected one.
  */
 export default function OverlayEditor({ uri, kind, overlays, onChange }: Props) {
   const [dims, setDims] = useState({ w: 0, h: 0 });
@@ -74,7 +76,7 @@ export default function OverlayEditor({ uri, kind, overlays, onChange }: Props) 
     <View style={s.root}>
       <Pressable style={s.canvas} onLayout={onLayout} onPress={() => setSelected(null)}>
         {kind === "photo" ? (
-          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+          <Image source={{ uri }} style={StyleSheet.absoluteFill} resizeMode="contain" />
         ) : (
           <VideoPreview uri={uri} />
         )}
@@ -122,7 +124,7 @@ function VideoPreview({ uri }: { uri: string }) {
     p.muted = true;
     p.play();
   });
-  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="cover" nativeControls={false} />;
+  return <VideoView player={player} style={StyleSheet.absoluteFill} contentFit="contain" nativeControls={false} />;
 }
 
 /** A draggable, selectable overlay box. Uses a latest-ref so the one-time

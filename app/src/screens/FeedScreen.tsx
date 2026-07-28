@@ -88,6 +88,17 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
             onOpenProfile={(it) =>
               navigation.navigate("UserProfile", { userId: it.creatorUserId })
             }
+            onUseSound={(it) =>
+              navigation.navigate("UploadTab", {
+                reuseSound: {
+                  id: it.musicTrackId,
+                  title: it.musicTitle ?? "Original sound",
+                  artist: it.musicArtist ?? null,
+                  source: it.musicSource ?? "catalog",
+                  durationSeconds: it.musicDurationSeconds ?? null,
+                },
+              })
+            }
           />
         )}
         pagingEnabled

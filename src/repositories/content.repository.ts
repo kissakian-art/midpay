@@ -1,14 +1,28 @@
 import { and, desc, eq, lt, ne, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { content, creators, users, type Content, type NewContent } from "../db/schema";
+import { content, creators, tracks, users, type Content, type NewContent } from "../db/schema";
 
-/** Feed item: content plus its creator's public identity. */
+/** Feed item: content plus its creator's public identity, plus the attached
+ *  sound's public details (null when the post has no music) so the feed can
+ *  label a "use this sound" shortcut and hand the track to the studio. */
 export interface FeedItem extends Content {
   creatorHandle: string;
   creatorDisplayName: string | null;
   creatorUserId: string;
   creatorAvatarR2Key: string | null;
+  musicTitle: string | null;
+  musicArtist: string | null;
+  musicSource: "device" | "catalog" | null;
+  musicDurationSeconds: number | null;
 }
+
+/** The joined sound columns shared by every feed-shaped query. */
+const musicSelect = {
+  musicTitle: tracks.title,
+  musicArtist: tracks.artist,
+  musicSource: tracks.source,
+  musicDurationSeconds: tracks.durationSeconds,
+} as const;
 
 /**
  * ContentRepository — example of the isolated data-access layer (§2.4 rule #4).
@@ -73,10 +87,12 @@ export class ContentRepository {
         creatorDisplayName: users.displayName,
         creatorUserId: users.id,
         creatorAvatarR2Key: users.avatarR2Key,
+        ...musicSelect,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))
       .innerJoin(users, eq(users.id, creators.userId))
+      .leftJoin(tracks, eq(tracks.id, content.musicTrackId))
       .where(and(eq(creators.userId, userId), eq(content.status, "published")))
       .orderBy(desc(content.publishedAt))
       .all();
@@ -165,10 +181,12 @@ export class ContentRepository {
         creatorDisplayName: users.displayName,
         creatorUserId: users.id,
         creatorAvatarR2Key: users.avatarR2Key,
+        ...musicSelect,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))
       .innerJoin(users, eq(users.id, creators.userId))
+      .leftJoin(tracks, eq(tracks.id, content.musicTrackId))
       .where(and(...conds))
       .orderBy(desc(content.publishedAt))
       .limit(limit)
@@ -208,10 +226,12 @@ export class ContentRepository {
         creatorDisplayName: users.displayName,
         creatorUserId: users.id,
         creatorAvatarR2Key: users.avatarR2Key,
+        ...musicSelect,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))
       .innerJoin(users, eq(users.id, creators.userId))
+      .leftJoin(tracks, eq(tracks.id, content.musicTrackId))
       .where(eq(content.id, id))
       .get();
   }

@@ -107,10 +107,15 @@ export class SearchRepository {
         creatorDisplayName: users.displayName,
         creatorUserId: users.id,
         creatorAvatarR2Key: users.avatarR2Key,
+        musicTitle: tracks.title,
+        musicArtist: tracks.artist,
+        musicSource: tracks.source,
+        musicDurationSeconds: tracks.durationSeconds,
       })
       .from(content)
       .innerJoin(creators, eq(creators.id, content.creatorId))
       .innerJoin(users, eq(users.id, creators.userId))
+      .leftJoin(tracks, eq(tracks.id, content.musicTrackId))
       .where(
         and(
           eq(content.status, "published"),

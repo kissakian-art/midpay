@@ -1,3 +1,4 @@
+import { useAudioPlayer } from "expo-audio";
 import {
   CameraView,
   useCameraPermissions,
@@ -27,6 +28,7 @@ import {
   createContent,
   getPricing,
   listBackgrounds,
+  musicAudioUrl,
   publishContent,
   uploadMedia,
   uploadThumbnail,
@@ -167,7 +169,7 @@ async function makeVideoThumbnail(videoUri: string): Promise<string | null> {
   }
 }
 
-export default function StudioScreen({ navigation }: { navigation: any }) {
+export default function StudioScreen({ navigation, route }: { navigation: any; route: any }) {
   const [camPerm, requestCam] = useCameraPermissions();
   const [, requestMic] = useMicrophonePermissions();
   const cameraRef = useRef<CameraView>(null);
@@ -189,6 +191,25 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
   const [musicEnd, setMusicEnd] = useState<number | null>(null);
   const [musicVolume, setMusicVolume] = useState(100); // 0..100 playback loudness
   const [musicOpen, setMusicOpen] = useState(false);
+
+  // Lip-sync mode: a song chosen BEFORE recording that plays out loud while the
+  // camera films (video-only, no mic — see toggleRecord), then auto-attaches to
+  // the post so the clean track plays over the video at playback (TikTok-style).
+  const [camSong, setCamSong] = useState<Track | null>(null);
+  const [camSongOpen, setCamSongOpen] = useState(false);
+  const camAudio = useAudioPlayer(camSong ? { uri: musicAudioUrl(camSong.id) } : null);
+
+  // Arriving from a feed "use this sound" tap: drop straight into lip-sync mode
+  // with that track loaded, then clear the param so it doesn't re-fire.
+  const reuseSound = route?.params?.reuseSound as Track | undefined;
+  useEffect(() => {
+    if (!reuseSound?.id) return;
+    setCreateMode("camera");
+    setMode("video");
+    setCamSong(reuseSound);
+    navigation.setParams({ reuseSound: undefined });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reuseSound?.id]);
   const [floors, setFloors] = useState(DEFAULT_FLOORS);
 
   // Live price floors (photo floor is lower than video). Backend re-validates.
@@ -261,9 +282,12 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       : {};
 
   // Open a fresh review with no leftover overlays/music from a previous take.
-  const openCapture = (c: Capture) => {
+  // A lip-sync take passes `seedSong` so the song it was filmed to is already
+  // attached as the post's music (from the start, so it aligns with the video).
+  const openCapture = (c: Capture, seedSong: Track | null = null) => {
     setOverlays([]);
-    selectMusic(null);
+    if (seedSong) selectMusic(seedSong);
+    else selectMusic(null);
     setMusicVolume(100);
     // Seed the price at the floor for this kind (photo floor is lower).
     setPriceText(String(c.kind === "photo" ? floors.photoFloor : floors.recordedFloor));
@@ -302,19 +326,40 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
       Alert.alert("Camera not ready", "Give it a moment and try again.");
       return;
     }
-    const mic = await requestMic();
-    if (!mic.granted) {
-      Alert.alert("Microphone needed", "Allow microphone access to record video with sound.");
-      return;
+    // Lip-sync take: no mic needed — we film video-only (the CameraView `mute`
+    // prop) so no recording audio session opens. That's what lets the song keep
+    // playing out loud during capture (Android pauses playback the moment a mic
+    // session starts). The clean track is attached to the post instead.
+    const lipSync = !!camSong;
+    if (!lipSync) {
+      const mic = await requestMic();
+      if (!mic.granted) {
+        Alert.alert("Microphone needed", "Allow microphone access to record video with sound.");
+        return;
+      }
     }
     setRecording(true);
+    if (lipSync) {
+      try {
+        camAudio.loop = true;
+        camAudio.seekTo(0).catch(() => {});
+        camAudio.play();
+      } catch {
+        // best-effort; recording still proceeds silently if playback fails
+      }
+    }
     try {
       const rec = await cameraRef.current?.recordAsync({ maxDuration: MAX_SECONDS });
-      if (rec?.uri) openCapture({ uri: rec.uri, kind: "video", filtered: false });
+      if (rec?.uri) openCapture({ uri: rec.uri, kind: "video", filtered: false }, camSong);
       else Alert.alert("Recording failed", "No video was produced. Try again.");
     } catch (e) {
       Alert.alert("Recording failed", e instanceof Error ? e.message : "Try again");
     } finally {
+      try {
+        camAudio.pause();
+      } catch {
+        // released
+      }
       setRecording(false);
     }
   };
@@ -616,27 +661,32 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         style={StyleSheet.absoluteFill}
         facing={facing}
         mode={mode}
+        // Lip-sync: filming to a chosen song records video-ONLY (no mic), so the
+        // song can keep playing out loud and there's no tinny mic-captured double.
+        mute={!!camSong}
         // Cap recording at 720p — the platform's max quality (budget/bandwidth).
         // If the device can't do 720p, expo-camera falls back to its highest.
         videoQuality="720p"
         onCameraReady={() => setReady(true)}
       />
 
-      <View style={s.topBar}>
-        <TouchableOpacity onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}>
-          <Text style={s.topIcon}>🔄</Text>
-        </TouchableOpacity>
-        <View style={s.captureToggle}>
-          {(["picture", "video"] as const).map((m) => (
-            <TouchableOpacity key={m} onPress={() => !recording && setMode(m)}>
-              <Text style={[s.modeText, mode === m && s.modeTextActive]}>
-                {m === "picture" ? "Photo" : "Video"}
-              </Text>
-            </TouchableOpacity>
-          ))}
+      {/* Lip-sync: pick a song to film to (video mode only, not while recording).
+          Filming to it records video-only and attaches the clean track to the post. */}
+      {mode === "video" && !recording ? (
+        <View style={s.camSongWrap}>
+          <TouchableOpacity style={s.camSongBtn} onPress={() => setCamSongOpen(true)}>
+            <Text style={s.camSongText} numberOfLines={1}>
+              {camSong ? `🎵  ${camSong.title}` : "🎵  Add sound"}
+            </Text>
+            {camSong ? (
+              <TouchableOpacity onPress={() => setCamSong(null)} hitSlop={10}>
+                <Text style={s.camSongClear}>✕</Text>
+              </TouchableOpacity>
+            ) : null}
+          </TouchableOpacity>
+          {camSong ? <Text style={s.camSongHint}>Lip-sync · your mic is off while filming</Text> : null}
         </View>
-        <View style={{ width: 26 }} />
-      </View>
+      ) : null}
 
       {/* Recording indicator + timer */}
       {recording ? (
@@ -670,6 +720,17 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           ))}
         </ScrollView>
 
+        {/* Photo / Video toggle — sits just above the shutter. */}
+        <View style={s.captureToggle}>
+          {(["picture", "video"] as const).map((m) => (
+            <TouchableOpacity key={m} onPress={() => !recording && setMode(m)}>
+              <Text style={[s.modeText, mode === m && s.modeTextActive]}>
+                {m === "picture" ? "Photo" : "Video"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
         <View style={s.shutterRow}>
           <Text style={s.activeFilter}>{filter.id === "none" ? "" : filter.name}</Text>
           <TouchableOpacity
@@ -679,7 +740,14 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           >
             <View style={[s.shutterInner, recording && s.shutterInnerRec]} />
           </TouchableOpacity>
-          <View style={{ width: 60 }} />
+          {/* Flip camera — moved down beside the shutter. */}
+          <TouchableOpacity
+            style={s.flipBtn}
+            onPress={() => setFacing((f) => (f === "back" ? "front" : "back"))}
+            disabled={recording}
+          >
+            <Text style={s.topIcon}>🔄</Text>
+          </TouchableOpacity>
         </View>
 
         {modeStrip}
@@ -691,6 +759,17 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
           <Text style={s.busyText}>{busy}</Text>
         </View>
       ) : null}
+
+      {/* Song picker for lip-sync filming (separate from the review-screen music). */}
+      <MusicPicker
+        visible={camSongOpen}
+        currentTrackId={camSong?.id ?? null}
+        onSelect={(t) => {
+          setCamSong(t);
+          setCamSongOpen(false);
+        }}
+        onClose={() => setCamSongOpen(false)}
+      />
 
       {/* Review + post — full-bleed editor (add/drag text) above the post bar. */}
       <Modal visible={!!capture} animationType="slide" onRequestClose={closeReview}>
@@ -767,20 +846,13 @@ const s = StyleSheet.create({
   root: { flex: 1, backgroundColor: colors.bg },
   center: { alignItems: "center", justifyContent: "center", padding: 24 },
   permText: { color: colors.text, textAlign: "center", marginBottom: 20 },
-  topBar: {
-    position: "absolute",
-    top: 50,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingHorizontal: 20,
-  },
   topIcon: { fontSize: 26 },
+  flipBtn: { width: 60, alignItems: "center" },
   captureToggle: {
     flexDirection: "row",
     gap: 18,
+    alignSelf: "center",
+    marginBottom: 4,
     backgroundColor: "rgba(0,0,0,0.45)",
     borderRadius: 20,
     paddingHorizontal: 16,
@@ -802,6 +874,22 @@ const s = StyleSheet.create({
   },
   recDot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
   recText: { color: "#fff", fontWeight: "800", fontVariant: ["tabular-nums"] },
+  camSongWrap: { position: "absolute", top: 58, alignSelf: "center", alignItems: "center", maxWidth: "80%" },
+  camSongBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    maxWidth: "100%",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+  },
+  camSongText: { color: "#fff", fontWeight: "700", flexShrink: 1 },
+  camSongClear: { color: "rgba(255,255,255,0.8)", fontSize: 15, fontWeight: "800", paddingHorizontal: 2 },
+  camSongHint: { color: "rgba(255,255,255,0.7)", fontSize: 11, marginTop: 5, fontWeight: "600" },
   devNote: {
     position: "absolute",
     top: 96,

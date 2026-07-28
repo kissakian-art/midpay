@@ -103,6 +103,12 @@ export interface FeedItem {
   musicStartMs?: number | null;
   musicEndMs?: number | null;
   musicVolume?: number | null;
+  /** Attached sound's public details (null when the post has no music) — used
+   *  to label the "use this sound" shortcut and hand the track to the studio. */
+  musicTitle?: string | null;
+  musicArtist?: string | null;
+  musicSource?: "device" | "catalog" | null;
+  musicDurationSeconds?: number | null;
   pricing: "free" | "paid";
   priceUgx: number | null;
   /** True when the signed-in viewer already bought this paid item. */

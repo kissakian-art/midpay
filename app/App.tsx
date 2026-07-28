@@ -1,8 +1,9 @@
 import { DarkTheme, NavigationContainer } from "@react-navigation/native";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import { setAudioModeAsync } from "expo-audio";
 import { StatusBar } from "expo-status-bar";
-import React from "react";
+import React, { useEffect } from "react";
 import { ActivityIndicator, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { AuthProvider, useAuth } from "./src/auth";
@@ -158,6 +159,13 @@ function Root() {
 }
 
 export default function App() {
+  // Let the music player (expo-audio) mix with a clip's own audio (expo-video)
+  // instead of interrupting it — the other half of the "only one plays" fix.
+  // playsInSilentMode so music is audible even with the ringer off (iOS).
+  useEffect(() => {
+    setAudioModeAsync({ playsInSilentMode: true, interruptionMode: "mixWithOthers" }).catch(() => {});
+  }, []);
+
   return (
     <ErrorBoundary>
       <AuthProvider>

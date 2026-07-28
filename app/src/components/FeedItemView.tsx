@@ -31,6 +31,7 @@ import {
   type FeedItem,
 } from "../api";
 import { useAuth } from "../auth";
+import { cacheVideo, getCachedUri } from "../mediaCache";
 import { colors, ugx } from "../theme";
 import Avatar from "./Avatar";
 import TextBackground from "./TextBackground";
@@ -43,6 +44,7 @@ interface Props {
   onOpenComments: (item: FeedItem) => void;
   onMessageCreator: (item: FeedItem) => void;
   onOpenProfile: (item: FeedItem) => void;
+  onUseSound: (item: FeedItem) => void;
 }
 
 const SCRUB_MARGIN = 12;
@@ -80,6 +82,7 @@ export default function FeedItemView({
   onOpenComments,
   onMessageCreator,
   onOpenProfile,
+  onUseSound,
 }: Props) {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
@@ -111,6 +114,11 @@ export default function FeedItemView({
 
   const player = useVideoPlayer(null, (p) => {
     p.loop = true;
+    // The clip stays UNMUTED (narration must be audible), so its audio must be
+    // told to MIX with the separate music player. The default 'auto' lets other
+    // audio play only while this player is muted — which killed the music track
+    // and left "only one plays" after returning from background. (expo-video)
+    p.audioMixingMode = "mixWithOthers";
   });
 
   const isVideo = unlocked && item.kind === "video";
@@ -131,9 +139,24 @@ export default function FeedItemView({
 
   useEffect(() => {
     if (!unlocked || item.kind !== "video") return;
-    const source: VideoSource = { uri: mediaUrl(item.id), headers: authHeaders() };
+    // Play a locally-cached copy when we have one (no network, no auth header);
+    // otherwise stream and let it be cached in the background for next time.
+    const cached = getCachedUri(item.id);
+    const source: VideoSource = cached
+      ? { uri: cached }
+      : { uri: mediaUrl(item.id), headers: authHeaders() };
     player.replaceAsync(source).catch(() => {});
   }, [unlocked, item.id, item.kind, player]);
+
+  // Cache a FREE video the first time it actually gets watched (becomes the
+  // active cell), so repeat views skip the network. Paid videos are never
+  // written to disk — §4.4 content protection. De-duped inside cacheVideo.
+  useEffect(() => {
+    if (!active || !unlocked) return;
+    if (item.kind !== "video" || item.pricing !== "free") return;
+    if (getCachedUri(item.id)) return;
+    cacheVideo(item.id).catch(() => {});
+  }, [active, unlocked, item.kind, item.pricing, item.id]);
 
   // Keep the clip's OWN audio (narration) audible; the music is layered under it
   // at the creator-set volume rather than replacing it, so tutorials work.
@@ -192,6 +215,41 @@ export default function FeedItemView({
       // already released
     }
   }, [playing, hasMusic, audio]);
+
+  // Returning on-screen (from background or another screen) makes Android
+  // re-arbitrate audio focus, which could resume only ONE of the two players.
+  // Re-assert BOTH together when we come back — twice, since the OS sometimes
+  // grabs focus a beat after the first play() call.
+  useEffect(() => {
+    if (!onScreen || !unlocked || paused) return;
+    let cancelled = false;
+    const reassert = () => {
+      if (cancelled) return;
+      try {
+        if (isVideo) {
+          player.muted = false;
+          player.play();
+        }
+      } catch {
+        // player released
+      }
+      try {
+        if (hasMusic) {
+          audio.volume = musicVol;
+          audio.loop = true;
+          audio.play();
+        }
+      } catch {
+        // player released
+      }
+    };
+    reassert();
+    const t = setTimeout(reassert, 350);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [onScreen, unlocked, paused, isVideo, hasMusic, player, audio, musicVol]);
 
   // Poll position for the scrubber and loop the music segment.
   useEffect(() => {
@@ -359,10 +417,10 @@ export default function FeedItemView({
         <Image
           source={{ uri: mediaUrl(item.id), headers: authHeaders() }}
           style={s.video}
-          resizeMode="cover"
+          resizeMode="contain"
         />
       ) : unlocked ? (
-        <VideoView player={player} style={s.video} contentFit="cover" nativeControls={false} />
+        <VideoView player={player} style={s.video} contentFit="contain" nativeControls={false} />
       ) : (
         <View style={s.locked}>
           <Text style={s.lockIcon}>🔒</Text>
@@ -395,6 +453,15 @@ export default function FeedItemView({
         {item.title ? <Text style={s.title}>{item.title}</Text> : null}
         {item.pricing === "paid" && unlocked ? (
           <Text style={s.ownedBadge}>Purchased ✓</Text>
+        ) : null}
+        {/* Reuse-sound shortcut — only on FREE videos that carry a sound. Tapping
+            takes the viewer to the studio with this track ready to film to. */}
+        {item.kind === "video" && item.pricing === "free" && item.musicTrackId ? (
+          <TouchableOpacity style={s.soundBtn} onPress={() => onUseSound(item)} activeOpacity={0.8}>
+            <Text style={s.soundText} numberOfLines={1}>
+              🎵  {item.musicTitle ?? "Original sound"}  ·  Use this sound
+            </Text>
+          </TouchableOpacity>
         ) : null}
       </View>
 
@@ -507,6 +574,20 @@ const s = StyleSheet.create({
   handle: { color: colors.text, fontWeight: "800", fontSize: 16 },
   title: { color: colors.text, marginTop: 4 },
   ownedBadge: { color: colors.success, marginTop: 6, fontWeight: "700", fontSize: 12 },
+  soundBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    alignSelf: "flex-start",
+    maxWidth: "100%",
+    marginTop: 10,
+    backgroundColor: "rgba(0,0,0,0.45)",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.25)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+  },
+  soundText: { color: "#fff", fontWeight: "700", fontSize: 12, flexShrink: 1 },
   rail: { position: "absolute", right: 10, bottom: 100, alignItems: "center", gap: 18 },
   action: { alignItems: "center" },
   actionIcon: {
