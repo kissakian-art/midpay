@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { ApiError } from "../api";
 import { useAuth } from "../auth";
 import { TERMS_SECTIONS } from "../terms";
@@ -18,6 +19,7 @@ import { colors } from "../theme";
 
 export default function LoginScreen() {
   const { login, signup } = useAuth();
+  const insets = useSafeAreaInsets();
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
@@ -116,7 +118,7 @@ export default function LoginScreen() {
               </View>
             ))}
           </ScrollView>
-          <View style={s.termsActions}>
+          <View style={[s.termsActions, { paddingBottom: insets.bottom + 14 }]}>
             <TouchableOpacity style={s.termsClose} onPress={() => setTermsOpen(false)}>
               <Text style={s.termsCloseText}>Close</Text>
             </TouchableOpacity>

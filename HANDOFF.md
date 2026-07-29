@@ -1,11 +1,24 @@
 # MidPay — Session Handoff
 
 Living status doc for picking up work in a fresh session. Last updated
-2026-07-26 after the **app: playback/pricing/music** commit (`9eeeb49`) — this
-session added the admin web console + creator lookup, the 100-min free-video
-cap, per-kind price floors (photo 2,000 / video 5,000), 720p quality cap, music
-volume + in-picker preview, feed-playback fixes, the tab-bar tweaks, and T&C at
-signup. All committed to `main` and pushed; backend deployed + migrated.
+2026-07-29 (commit `0c844ac`, backend Version `ba6335e6`). This session:
+**removed the music feature entirely** (product decision — a post's only audio
+is the video's own); made photos AND videos render **contain, not cover** (16:9
+shows whole, no crop/zoom); added a **100-video on-device LRU cache** (free
+videos); bounded the feed to an **active+next video-decoder window** (low-end
+crash mitigation); let creators **delete their own posts**; built a **creator
+analytics/earnings dashboard** (earnings over time, per-post performance, live
+peak viewers, per-video view counts) — deployed + migrated (D1 `0010` adds
+`content.view_count`); moved the camera Photo/Video toggle + flip control down
+by the shutter; fixed the T&C modal buttons colliding with the Android nav bar;
+and set up a **ZEGOCLOUD project** for future live video (AppID `15666683`,
+[[zego-live-project]]) — live itself still deferred. All committed to `main` and
+pushed; backend deployed + migrated.
+
+**Lip-sync recording + "use this sound" reuse were built then removed** in the
+same session as part of dropping music — don't resurrect them from git without
+re-reading this. The backend `tracks`/`/music/*` tables + routes are **left
+dormant** (unused, not dropped).
 
 ---
 
@@ -60,8 +73,16 @@ easier: `POST /auth/signup {phone,password}` on a throwaway number to get a toke
 ## 4. Backend — DONE and deployed
 
 Layered handlers → services → repositories (§2.4 portability: UUID PKs, portable
-SQL, isolated repos). Migrations `0000`–`0009` all applied to remote D1
-(`0009` = `content.music_volume`).
+SQL, isolated repos). Migrations `0000`–`0010` all applied to remote D1
+(`0010` = `content.view_count`).
+
+**Creator analytics — NEW, deployed.** `GET /creators/me/analytics?range=day|
+week|all` (auth; `CreatorAnalyticsService`) → earnings for the window (creator
+share from paid `transactions`) + wallet available/held/lifetime, engagement
+totals (posts/views/likes/comments), per-post performance, and live-session peak
+viewers. `POST /content/:id/view` (auth) bumps `content.view_count` via
+`ContentService.recordView`. **Music routes/tables (`/music/*`, `tracks`) are
+DORMANT** — the app no longer calls them; not dropped.
 
 - **Auth — MOBILE + PASSWORD** (changed 2026-07-24, was phone OTP). PBKDF2 via
   `services/crypto.ts`. `POST /auth/signup` (also claims a legacy OTP-only account
@@ -121,32 +142,35 @@ music (`source:catalog`) + text-background uploads.
   fixed an OOM crash), **tap-to-pause + always-visible progress bar** (drag to
   seek; time read-out shows while paused/seeking), photos render as `Image`,
   styled text posts, right rail (follow/like/comment/DM), **🔍 search** (top-right).
-  Playback (video **and** music) stops when the screen is unfocused or the app is
-  backgrounded (`useIsFocused` + `AppState`), and seeking a video-with-music keeps
-  the music in sync.
+  Playback stops when the screen is unfocused or the app is backgrounded
+  (`useIsFocused` + `AppState`) and re-asserts on return.
 - **Studio (Create)** — camera (photo/video, filter carousel bakes **photos** via
-  Skia, §6), Camera/Upload/**Text** modes. Review screen: **OverlayEditor**
-  (draggable text-on-shape), **🎵 Music** (picker: shared library + upload from
-  device — **tap a library track to PREVIEW it** (expo-audio) + "Use this sound";
-  **MusicTrimmer** range-slider for photo/text segments; **music volume** presets
-  Mute/25/50/75/100% so tutorials can duck music under narration), a **creator-set
-  price** (Free / Paid + amount field; kind-aware floor — photos 2,000, else 5,000,
-  fetched from `/content/pricing`; `PriceControls` in StudioScreen), post.
-  Text composer is **WYSIWYG** (type on a gradient/image background) with a style
-  strip (12 backgrounds + admin image backgrounds, 7 fonts, 6 colours, align,
-  bold) + music.
-- **Feed playback** — `FeedItemView` plays a post's music over the media
-  (`expo-audio`) at `item.musicVolume` (0..100, default 100): video caps music to
-  the clip; photo/text loops the chosen segment; pause pauses both. **The video's
-  own audio is now kept (not muted)** so music layers UNDER narration — the
-  tutorial fix. (A future "mute original audio" toggle would restore the old
-  music-replaces-clip behaviour for music-video posts.)
+  Skia, §6), Camera/Upload/**Text** modes. The camera Photo/Video toggle + flip
+  control sit **down by the shutter** (moved this session). Review screen:
+  **OverlayEditor** (draggable text-on-shape) + a **creator-set price** (Free /
+  Paid + amount field; kind-aware floor — photos 2,000, else 5,000, from
+  `/content/pricing`; `PriceControls`), post. Text composer is **WYSIWYG** (type
+  on a gradient/image background) with a style strip (12 backgrounds + admin
+  image backgrounds, 7 fonts, 6 colours, align, bold). **No music anywhere.**
+- **Feed playback** — `FeedItemView`: a video plays its **own audio only** (one
+  stream; music removed). Only the **active cell + the next one ahead** hold a
+  video decoder (`preload` prop; `PRELOAD_AHEAD`/`PRELOAD_BEHIND` in FeedScreen)
+  — releases others via `replaceAsync(null)` to avoid exhausting hardware
+  decoders on low-end phones (suspected crash fix; confirm with a device logcat).
+  Photos + videos render **contain** (whole, letterboxed — no crop). Records one
+  **view** per post when it becomes active (`recordView`).
+- **Creator delete** — long-press your own post in the profile grid → confirm →
+  hard-delete (existing `DELETE /content/:id`, ownership-enforced).
+- **Creator analytics** — Profile → "Your earnings & stats" → `CreatorAnalytics
+  Screen` (Today/This week/All time): earnings hero, wallet cards, totals
+  (posts/views/likes/comments), live sessions, per-post performance. Reads
+  `GET /creators/me/analytics`.
 - **Comments** — `CommentsSheet`: safe-area bottom (clears nav bar), per-comment
   like heart, threaded replies with a "Replying to @x" banner, avatars.
 - **Search** — `SearchScreen`: debounced, grouped results; creator→profile,
   post/comment→PostViewer, sounds shown (not yet tappable).
 - **Admin** — `AdminScreen` (own Profile → "Admin", only if `isAdmin`): upload
-  catalog sounds + text backgrounds (long-press to remove).
+  text backgrounds (long-press to remove). Catalog-sound upload removed with music.
 - **Profile, Inbox/DMs, ErrorBoundary** — unchanged from prior.
 
 **Building the APK.** This session's app changes are **JS-only — no new native
@@ -226,11 +250,18 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
   moderation deep-link from a reported target to its content/creator.
 - **Search follow-ups** — sound results aren't tappable (no "posts using this
   sound" screen); comment match is a substring (the "3 words" was simplified).
-- **Music follow-ups** — music **volume DONE** (per-post `musicVolume`, ducks
-  under narration). Remaining: "original sound" extracted from a video's own
-  audio; per-segment trim on video music (`musicEndMs` wired but video uses
-  cap-to-clip); an optional **"mute original audio" toggle** (offered to owner)
-  to restore music-replaces-clip for music-video posts.
+- **Music — REMOVED entirely** (2026-07-29). No follow-ups. Backend `tracks`/
+  `/music/*` dormant. Note: SearchScreen may still render a now-empty "sounds"
+  group and the search backend still queries `tracks` — harmless, tidy up if it
+  bothers you.
+- **Creator analytics — DONE + deployed** (earnings, per-post, live peak
+  viewers, per-video views). Possible follow-ups: charts/trends over time,
+  CSV/statement export, notification when a sale settles.
+- **Live (#1 viewer count, #2 scrolling comments) — DEFERRED on live video.**
+  LiveRoom DO already tracks viewers + chat; ZEGO project is created but no SDK/
+  broadcaster/viewer UI yet. Build the real live screen (video + viewer count +
+  TikTok-style comments) once live is greenlit; calibrate the duration-aware
+  live price floor to cover ZEGO per-viewer-minute cost (prefer SD resolution).
 - **T&C — record acceptance server-side.** Signup now shows + gates on a Terms
   modal, but acceptance is client-only. For enforceability, add
   `users.termsVersion`/`termsAcceptedAt` and have `POST /auth/signup` accept the
@@ -258,7 +289,7 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
 | GitHub | ✅ `kissakian-art/midpay` |
 | Flutterwave keys | ⏳ business verification in progress (last launch blocker) |
 | SMS provider | ✅ **no longer needed** (mobile+password auth) |
-| Agora/ZEGO (live video) | ❌ not set up |
+| ZEGOCLOUD (live video) | ⏳ project created (trial, AppID 15666683, Live Streaming product); SDK/UI not built; live still deferred ([[zego-live-project]]). Owner to ROTATE ServerSecret before launch. |
 | Google Play ($25) | ❌ only if Play Store wanted |
 
 D1 `midpay` id `d8b4a6c5-e94c-4164-a752-390e9302644c`. **Cost:** ~$0/month fixed;
@@ -278,13 +309,22 @@ per-use = Flutterwave 3%/sale + live streaming free tier.
   split applies at any price (§3.2). Live floor scales with duration (§3.3).
 - **Max quality = 720p.** Camera records at 720p; gallery videos above 720p are
   rejected (no server transcode to downscale). Allowed: 720/480/360 and below.
-- **Music does NOT replace the clip's own audio** — it layers UNDER it at the
-  creator-set `musicVolume`, so tutorial narration stays audible (2026-07-26).
+- **No music / added audio at all** (2026-07-29 owner decision) — a post's only
+  sound is the video's own (recorded or uploaded). The whole music feature
+  (picker, trimmer, volume, lip-sync, "use sound" reuse, catalog sounds) was
+  removed from the app; backend music tables/routes left dormant. Don't re-add.
+- **Media shows whole, never cropped** — photos AND videos render `contain`
+  (letterboxed), in the editor and the feed, so what you preview is what posts.
+- **Feed decoder window** — only the active cell + next hold a video decoder;
+  the rest are released. Prevents low-end hardware-decoder exhaustion.
 - **Payout number = registration number.**
 - **`@username` unique; display name NOT** (two "Coach Emma"s allowed).
-- **Compose-at-playback** for overlays + music + text backgrounds — metadata
-  rendered over the media in MidPay's own player, NEVER muxed/re-encoded into the
-  file. This is what sidesteps the video-encoder wall. Keep this pattern.
+- **Compose-at-playback** for overlays + text backgrounds — metadata rendered
+  over the media in MidPay's own player, NEVER muxed/re-encoded into the file.
+  This sidesteps the video-encoder wall. Keep this pattern. (Client-side FFmpeg
+  muxing was considered for sharing/merged files and rejected — `ffmpeg-kit-rn`
+  is retired, and it would worsen low-end memory; a self-hosted on-demand
+  transcode service is the path if merged-file *sharing* is ever wanted.)
 - Live price floor (§3.3) + auto-terminate are hard requirements.
 
 ---
@@ -310,10 +350,13 @@ Backend (src/)
 
 App (app/src/)
   screens/*                    Feed, Studio, UserProfile, PostViewer, Inbox,
-                               Conversation, Login (password), Search, Admin
-  components/*                 FeedItemView (play controls + music + overlays + text
-                               bg), CommentsSheet, OverlayEditor, MusicPicker,
-                               MusicTrimmer, TextBackground, TextOverlayLayer, Avatar
+                               Conversation, Login (password), Search, Admin,
+                               CreatorAnalytics (earnings dashboard)
+  components/*                 FeedItemView (play controls + decoder window +
+                               overlays + text bg), CommentsSheet, OverlayEditor,
+                               TextBackground, TextOverlayLayer, Avatar
+                               (MusicPicker/MusicTrimmer DELETED with music)
+  mediaCache.ts                on-device LRU cache (free videos, max 100)
   studio/*                     filter ENGINE (colorMatrix/filters/faceBlur) +
                                skiaFilter.ts (REAL photo baking, not a stub) +
                                textStyles.ts (bg/font/colour presets)
@@ -328,5 +371,5 @@ App (app/src/)
 ## 10. Memory pointers
 
 [[midpay-backend-status]] · [[open-signup-model]] · [[node-tls13-reset-workaround]]
-· [[stage2-live-filters-deferred]] · [[music-feature-design]] · [[in-app-admin]]
-· [[admin-web-console]]
+· [[stage2-live-filters-deferred]] · [[in-app-admin]] · [[admin-web-console]]
+· [[zego-live-project]]  (NOTE: [[music-feature-design]] is OBSOLETE — music removed 2026-07-29)
