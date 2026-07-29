@@ -230,6 +230,10 @@ export const getPricing = () =>
 export const deleteContent = (id: string) =>
   req<{ deleted: true }>(`/content/${id}`, { method: "DELETE" });
 
+/** Record one play/view of a post. Best-effort, fire-and-forget. */
+export const recordView = (id: string) =>
+  req<void>(`/content/${id}/view`, { method: "POST" }).catch(() => {});
+
 // --- Creator analytics (own earnings + performance) ---
 export interface CreatorAnalytics {
   isCreator: boolean;
@@ -241,12 +245,13 @@ export interface CreatorAnalytics {
     availableUgx: number;
     heldUgx: number;
   };
-  totals: { posts: number; likes: number; comments: number };
+  totals: { posts: number; views: number; likes: number; comments: number };
   perPost: {
     id: string;
     title: string | null;
     kind: "video" | "photo" | "text";
     pricing: "free" | "paid";
+    views: number;
     likes: number;
     comments: number;
     sales: number;

@@ -242,6 +242,11 @@ export class ContentService {
     return this.content.listPublishedByCreator(creatorId);
   }
 
+  /** Record one play/view of a post (published only; deleted posts are ignored). */
+  recordView(id: string): Promise<unknown> {
+    return this.content.incrementViewCount(id);
+  }
+
   async getForViewer(id: string): Promise<Content> {
     const item = await this.content.findById(id);
     if (!item || item.status === "deleted") throw notFound("content");

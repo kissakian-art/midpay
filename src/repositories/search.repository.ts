@@ -99,6 +99,7 @@ export class SearchRepository {
         likeCount: content.likeCount,
         commentCount: content.commentCount,
         purchaseCount: content.purchaseCount,
+        viewCount: content.viewCount,
         publishedAt: content.publishedAt,
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,

@@ -24,6 +24,7 @@ import {
   follow,
   like,
   mediaUrl,
+  recordView,
   unfollow,
   unlike,
   type FeedItem,
@@ -147,6 +148,16 @@ export default function FeedItemView({
     if (getCachedUri(item.id)) return;
     cacheVideo(item.id).catch(() => {});
   }, [active, unlocked, item.kind, item.pricing, item.id]);
+
+  // Count one view per post the first time it becomes the active cell (fires
+  // again only if this cell is recycled for a different post).
+  const viewedIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!active || !unlocked) return;
+    if (viewedIdRef.current === item.id) return;
+    viewedIdRef.current = item.id;
+    recordView(item.id);
+  }, [active, unlocked, item.id]);
 
   // Keep the clip's own audio audible.
   useEffect(() => {

@@ -98,6 +98,7 @@ export const content = sqliteTable(
     likeCount: integer("like_count").notNull().default(0),
     commentCount: integer("comment_count").notNull().default(0),
     purchaseCount: integer("purchase_count").notNull().default(0),
+    viewCount: integer("view_count").notNull().default(0),
 
     publishedAt: integer("published_at", { mode: "timestamp" }),
     createdAt: createdAt(),

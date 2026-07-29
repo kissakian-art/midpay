@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { badRequest } from "../../services/errors";
 import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
-import { optionalInt, optionalString, readJson } from "../util";
+import { optionalInt, optionalString, readJson, requireParam } from "../util";
 
 export const contentRoutes = new Hono<AppEnv>();
 
@@ -30,6 +30,13 @@ contentRoutes.get("/feed", async (c) => {
   const before = c.req.query("before") ? Number(c.req.query("before")) : undefined;
   const viewerId = await getOptionalUserId(c);
   return c.json({ feed: await c.get("container").content.feed(limit, before, viewerId) });
+});
+
+// Record a play/view. Authed (the app is always signed in) to blunt anonymous
+// inflation; best-effort, returns fast and never blocks playback.
+contentRoutes.post("/:id/view", requireAuth, async (c) => {
+  await c.get("container").content.recordView(requireParam(c, "id"));
+  return c.body(null, 204);
 });
 
 // Public — the post's cover thumbnail (video first-frame / photo). Always

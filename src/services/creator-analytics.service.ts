@@ -58,6 +58,7 @@ export class CreatorAnalyticsService {
       title: p.title,
       kind: p.kind,
       pricing: p.pricing,
+      views: p.viewCount,
       likes: p.likeCount,
       comments: p.commentCount,
       // Sales/earnings in the selected window (falls back to 0 when none).
@@ -91,6 +92,7 @@ export class CreatorAnalyticsService {
       },
       totals: {
         posts: posts.length,
+        views: posts.reduce((a, p) => a + p.viewCount, 0),
         likes: posts.reduce((a, p) => a + p.likeCount, 0),
         comments: posts.reduce((a, p) => a + p.commentCount, 0),
       },

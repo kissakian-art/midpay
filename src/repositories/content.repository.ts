@@ -79,6 +79,7 @@ export class ContentRepository {
         likeCount: content.likeCount,
         commentCount: content.commentCount,
         purchaseCount: content.purchaseCount,
+        viewCount: content.viewCount,
         publishedAt: content.publishedAt,
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,
@@ -143,6 +144,16 @@ export class ContentRepository {
       .run();
   }
 
+  /** Bump the play/view counter (published items only, so deleted posts don't
+   *  accrue views). Fire-and-forget from the feed. */
+  incrementViewCount(id: string): Promise<unknown> {
+    return this.db
+      .update(content)
+      .set({ viewCount: sql`${content.viewCount} + 1` })
+      .where(and(eq(content.id, id), eq(content.status, "published")))
+      .run();
+  }
+
   /**
    * Global feed: recent published content, newest first, with creator identity.
    * Cursor = publishedAt unix seconds of the last item from the previous page.
@@ -173,6 +184,7 @@ export class ContentRepository {
         likeCount: content.likeCount,
         commentCount: content.commentCount,
         purchaseCount: content.purchaseCount,
+        viewCount: content.viewCount,
         publishedAt: content.publishedAt,
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,
@@ -218,6 +230,7 @@ export class ContentRepository {
         likeCount: content.likeCount,
         commentCount: content.commentCount,
         purchaseCount: content.purchaseCount,
+        viewCount: content.viewCount,
         publishedAt: content.publishedAt,
         createdAt: content.createdAt,
         updatedAt: content.updatedAt,

@@ -100,6 +100,7 @@ export default function CreatorAnalyticsScreen() {
           {/* Engagement totals */}
           <View style={s.totalsRow}>
             <Total label="Posts" value={data.totals.posts} />
+            <Total label="Views" value={data.totals.views} />
             <Total label="Likes" value={data.totals.likes} />
             <Total label="Comments" value={data.totals.comments} />
           </View>
@@ -130,6 +131,7 @@ export default function CreatorAnalyticsScreen() {
                   {kindIcon(p.kind)}  {p.title || "Untitled"}
                 </Text>
                 <View style={s.rowStatsWrap}>
+                  <Text style={s.rowStat}>👁 {p.views}</Text>
                   <Text style={s.rowStat}>♥ {p.likes}</Text>
                   <Text style={s.rowStat}>💬 {p.comments}</Text>
                   {p.pricing === "paid" ? (
