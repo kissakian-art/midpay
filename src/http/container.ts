@@ -21,6 +21,7 @@ import { UserRepository } from "../repositories/user.repository";
 import { WalletRepository } from "../repositories/wallet.repository";
 import { AdminAuthService } from "../services/admin/admin-auth.service";
 import { AnalyticsService } from "../services/admin/analytics.service";
+import { CreatorAnalyticsService } from "../services/creator-analytics.service";
 import { ConfigAdminService } from "../services/admin/config-admin.service";
 import { CreatorAdminService } from "../services/admin/creator-admin.service";
 import { ModerationService } from "../services/admin/moderation.service";
@@ -59,6 +60,7 @@ export interface Container {
   creatorAdmin: CreatorAdminService;
   configAdmin: ConfigAdminService;
   analytics: AnalyticsService;
+  creatorAnalytics: CreatorAnalyticsService;
   social: SocialService;
   profile: ProfileService;
   messaging: MessagingService;
@@ -114,6 +116,7 @@ export function createContainer(env: Env): Container {
   const creatorAdmin = new CreatorAdminService(creators, audit, users);
   const configAdmin = new ConfigAdminService(configRepo, audit, env);
   const analytics = new AnalyticsService(analyticsRepo, config);
+  const creatorAnalytics = new CreatorAnalyticsService(creators, transactions, wallets, contentRepo, liveRepo);
   const social = new SocialService(socialRepo, users, contentRepo, creators);
   const profile = new ProfileService(users, storage);
   const messaging = new MessagingService(messagingRepo, users);
@@ -136,6 +139,7 @@ export function createContainer(env: Env): Container {
     creatorAdmin,
     configAdmin,
     analytics,
+    creatorAnalytics,
     social,
     messaging,
     profile,

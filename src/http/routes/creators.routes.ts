@@ -17,6 +17,16 @@ creatorRoutes.post("/apply", requireAuth, async (c) => {
   return c.json({ creator }, 201);
 });
 
+// The signed-in creator's own analytics dashboard (§7.7 creator view): earnings
+// over a window, per-post performance, and live-session reach. Registered BEFORE
+// "/:id" so "me" isn't captured as a creator id.
+creatorRoutes.get("/me/analytics", requireAuth, async (c) => {
+  const q = c.req.query("range");
+  const range = q === "day" || q === "all" ? q : "week";
+  const data = await c.get("container").creatorAnalytics.forUser(c.get("userId"), range);
+  return c.json(data);
+});
+
 // Public creator profile.
 creatorRoutes.get("/:id", async (c) => {
   const creator = await c.get("container").creators.findById(c.req.param("id"));

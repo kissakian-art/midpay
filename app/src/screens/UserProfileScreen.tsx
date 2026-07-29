@@ -284,6 +284,16 @@ export default function UserProfileScreen({ route, navigation }: any) {
         )}
       </View>
 
+      {isSelf ? (
+        <TouchableOpacity
+          style={s.earningsBtn}
+          onPress={() => navigation.navigate("CreatorAnalytics")}
+          activeOpacity={0.85}
+        >
+          <Text style={s.earningsBtnText}>📊  Your earnings &amp; stats</Text>
+        </TouchableOpacity>
+      ) : null}
+
       {prof?.bio ? <Text style={s.bio}>{prof.bio}</Text> : null}
 
       <View style={s.tabRow}>
@@ -483,6 +493,17 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   iconBtnText: { color: colors.text, fontWeight: "700", fontSize: 14 },
+  earningsBtn: {
+    marginTop: 12,
+    width: "100%",
+    backgroundColor: colors.card,
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  earningsBtnText: { color: colors.text, fontWeight: "800", fontSize: 14 },
   bio: { color: colors.text, textAlign: "center", marginTop: 16, lineHeight: 20 },
   tabRow: {
     flexDirection: "row",

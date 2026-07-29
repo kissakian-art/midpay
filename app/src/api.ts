@@ -230,6 +230,40 @@ export const getPricing = () =>
 export const deleteContent = (id: string) =>
   req<{ deleted: true }>(`/content/${id}`, { method: "DELETE" });
 
+// --- Creator analytics (own earnings + performance) ---
+export interface CreatorAnalytics {
+  isCreator: boolean;
+  range: "day" | "week" | "all";
+  earnings: {
+    rangeUgx: number;
+    salesCount: number;
+    lifetimeUgx: number;
+    availableUgx: number;
+    heldUgx: number;
+  };
+  totals: { posts: number; likes: number; comments: number };
+  perPost: {
+    id: string;
+    title: string | null;
+    kind: "video" | "photo" | "text";
+    pricing: "free" | "paid";
+    likes: number;
+    comments: number;
+    sales: number;
+    earningsUgx: number;
+  }[];
+  liveSessions: {
+    id: string;
+    title: string | null;
+    status: string;
+    startedAt: string | null;
+    peakViewers: number;
+  }[];
+}
+
+export const getMyAnalytics = (range: "day" | "week" | "all" = "week") =>
+  req<CreatorAnalytics>(`/creators/me/analytics?range=${range}`);
+
 // --- Text backgrounds (admin-uploaded catalog) ---
 export const backgroundImageUrl = (id: string) => `${API_URL}/backgrounds/${id}/image`;
 export const listBackgrounds = () => req<{ backgrounds: { id: string }[] }>("/backgrounds");

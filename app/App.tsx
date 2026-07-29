@@ -10,6 +10,7 @@ import { AuthProvider, useAuth } from "./src/auth";
 import { ErrorBoundary } from "./src/components/ErrorBoundary";
 import AdminScreen from "./src/screens/AdminScreen";
 import ConversationScreen from "./src/screens/ConversationScreen";
+import CreatorAnalyticsScreen from "./src/screens/CreatorAnalyticsScreen";
 import FeedScreen from "./src/screens/FeedScreen";
 import InboxScreen from "./src/screens/InboxScreen";
 import LoginScreen from "./src/screens/LoginScreen";
@@ -137,6 +138,15 @@ function Root() {
             component={AdminScreen}
             options={{
               title: "Admin",
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+            }}
+          />
+          <Stack.Screen
+            name="CreatorAnalytics"
+            component={CreatorAnalyticsScreen}
+            options={{
+              title: "Your earnings",
               headerStyle: { backgroundColor: colors.bg },
               headerTintColor: colors.text,
             }}

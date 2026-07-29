@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { transactions, type NewTransaction, type Transaction } from "../db/schema";
 
@@ -60,5 +60,54 @@ export class TransactionRepository {
       .set({ paymentStatus: "failed" })
       .where(eq(transactions.id, id))
       .run();
+  }
+
+  // --- Creator analytics aggregates (paid sales only) ---
+
+  /** Total creator-share earned + number of paid sales, optionally since a date. */
+  async creatorEarnings(
+    creatorId: string,
+    since?: Date,
+  ): Promise<{ totalUgx: number; salesCount: number }> {
+    const conds = [
+      eq(transactions.creatorId, creatorId),
+      eq(transactions.paymentStatus, "paid"),
+    ];
+    if (since) conds.push(gte(transactions.paidAt, since));
+    const row = await this.db
+      .select({
+        totalUgx: sql<number>`coalesce(sum(${transactions.creatorShareUgx}), 0)`,
+        salesCount: sql<number>`count(*)`,
+      })
+      .from(transactions)
+      .where(and(...conds))
+      .get();
+    return { totalUgx: row?.totalUgx ?? 0, salesCount: row?.salesCount ?? 0 };
+  }
+
+  /** Paid recorded-content sales grouped by content id, optionally since a date. */
+  async creatorSalesByContent(
+    creatorId: string,
+    since?: Date,
+  ): Promise<{ contentId: string; salesCount: number; earningsUgx: number }[]> {
+    const conds = [
+      eq(transactions.creatorId, creatorId),
+      eq(transactions.paymentStatus, "paid"),
+      eq(transactions.type, "video_unlock"),
+    ];
+    if (since) conds.push(gte(transactions.paidAt, since));
+    const rows = await this.db
+      .select({
+        contentId: transactions.contentId,
+        salesCount: sql<number>`count(*)`,
+        earningsUgx: sql<number>`coalesce(sum(${transactions.creatorShareUgx}), 0)`,
+      })
+      .from(transactions)
+      .where(and(...conds))
+      .groupBy(transactions.contentId)
+      .all();
+    return rows.flatMap((r) =>
+      r.contentId ? [{ contentId: r.contentId, salesCount: r.salesCount, earningsUgx: r.earningsUgx }] : [],
+    );
   }
 }
