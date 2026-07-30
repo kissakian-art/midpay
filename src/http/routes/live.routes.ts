@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { verify } from "hono/jwt";
 import { ApiError, badRequest } from "../../services/errors";
-import { requireAuth } from "../middleware/auth";
+import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
 import { optionalInt, optionalString, readJson, requireInt, requireParam } from "../util";
 
@@ -57,9 +57,18 @@ liveRoutes.post("/quote-floor", async (c) => {
   return c.json(quote);
 });
 
-// Public — fetch a live event.
+// Public — everyone currently broadcasting (discovery). Registered BEFORE
+// "/:id" so "active" is not captured as an event id.
+liveRoutes.get("/active", async (c) => {
+  const lives = await c.get("container").live.listActive();
+  return c.json({ lives });
+});
+
+// Public, personalized — fetch a live event with the caller's access flags
+// (owned/isOwner) resolved when a valid token is present.
 liveRoutes.get("/:id", async (c) => {
-  const event = await c.get("container").live.get(c.req.param("id"));
+  const userId = await getOptionalUserId(c);
+  const event = await c.get("container").live.getForViewer(c.req.param("id"), userId);
   return c.json({ live: event });
 });
 

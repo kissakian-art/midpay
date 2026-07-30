@@ -98,7 +98,7 @@ export function createContainer(env: Env): Container {
 
   const auth = new AuthService(users, otps, config, env);
   const content = new ContentService(contentRepo, creators, entitlements, config, storage);
-  const live = new LiveService(liveRepo, creators, config);
+  const live = new LiveService(liveRepo, creators, config, entitlements);
   const payments = new PaymentsService(
     users,
     creators,

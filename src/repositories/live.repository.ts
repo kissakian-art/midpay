@@ -1,12 +1,54 @@
-import { desc, eq, sql } from "drizzle-orm";
+import { desc, eq, getTableColumns, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { liveEvents, type LiveEvent, type NewLiveEvent } from "../db/schema";
+import { creators, liveEvents, users, type LiveEvent, type NewLiveEvent } from "../db/schema";
+
+/** A live event decorated with its creator's public identity (feed/discovery). */
+export interface LiveEventWithCreator extends LiveEvent {
+  creatorUserId: string;
+  creatorHandle: string;
+  creatorDisplayName: string | null;
+  creatorAvatarR2Key: string | null;
+}
 
 export class LiveRepository {
   constructor(private readonly db: Database) {}
 
   findById(id: string): Promise<LiveEvent | undefined> {
     return this.db.select().from(liveEvents).where(eq(liveEvents.id, id)).get();
+  }
+
+  /** Selection of live_events columns plus the creator's public identity. */
+  private get withCreatorColumns() {
+    return {
+      // All live_events columns (getTableColumns keeps this in sync w/ schema).
+      ...getTableColumns(liveEvents),
+      creatorUserId: users.id,
+      creatorHandle: users.handle,
+      creatorDisplayName: users.displayName,
+      creatorAvatarR2Key: users.avatarR2Key,
+    };
+  }
+
+  findByIdWithCreator(id: string): Promise<LiveEventWithCreator | undefined> {
+    return this.db
+      .select(this.withCreatorColumns)
+      .from(liveEvents)
+      .innerJoin(creators, eq(creators.id, liveEvents.creatorId))
+      .innerJoin(users, eq(users.id, creators.userId))
+      .where(eq(liveEvents.id, id))
+      .get() as Promise<LiveEventWithCreator | undefined>;
+  }
+
+  /** Everyone currently broadcasting — newest first (discovery surface). */
+  listLiveWithCreator(): Promise<LiveEventWithCreator[]> {
+    return this.db
+      .select(this.withCreatorColumns)
+      .from(liveEvents)
+      .innerJoin(creators, eq(creators.id, liveEvents.creatorId))
+      .innerJoin(users, eq(users.id, creators.userId))
+      .where(eq(liveEvents.status, "live"))
+      .orderBy(desc(liveEvents.startedAt))
+      .all() as Promise<LiveEventWithCreator[]>;
   }
 
   create(row: NewLiveEvent): Promise<LiveEvent> {

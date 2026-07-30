@@ -1,6 +1,7 @@
 import type { LiveEvent } from "../db/schema";
 import { CreatorRepository } from "../repositories/creator.repository";
-import { LiveRepository } from "../repositories/live.repository";
+import { EntitlementRepository } from "../repositories/entitlement.repository";
+import { LiveRepository, type LiveEventWithCreator } from "../repositories/live.repository";
 import { ConfigService } from "./config.service";
 import { badRequest, forbidden, notFound, unprocessable } from "./errors";
 import { minLivePrice, validateLivePrice } from "./pricing";
@@ -13,6 +14,14 @@ export interface ScheduleLiveInput {
   scheduledStartAt?: number; // unix seconds
 }
 
+/** A live event with the viewer's access flags resolved for the UI. */
+export interface LiveEventForViewer extends LiveEventWithCreator {
+  /** The caller already holds a ticket (or is the broadcaster). */
+  owned: boolean;
+  /** The caller is the creator of this event. */
+  isOwner: boolean;
+}
+
 /**
  * LiveService — scheduling & lifecycle for live broadcasts (§4.2), enforcing
  * the §3.3 Live Duration-Based Price Floor at schedule time (server-side, a
@@ -23,6 +32,7 @@ export class LiveService {
     private readonly live: LiveRepository,
     private readonly creators: CreatorRepository,
     private readonly config: ConfigService,
+    private readonly entitlements: EntitlementRepository,
   ) {}
 
   private async requireActiveCreatorId(userId: string): Promise<string> {
@@ -112,6 +122,26 @@ export class LiveService {
     const event = await this.live.findById(id);
     if (!event) throw notFound("live event");
     return event;
+  }
+
+  /** Everyone currently broadcasting — the discovery surface (public). */
+  listActive(): Promise<LiveEventWithCreator[]> {
+    return this.live.listLiveWithCreator();
+  }
+
+  /**
+   * Fetch an event with the caller's access flags resolved. The broadcaster
+   * always "owns" their own event; any other viewer owns it once they hold an
+   * active ticket entitlement. Anonymous callers (userId null) never own it.
+   */
+  async getForViewer(id: string, userId: string | null): Promise<LiveEventForViewer> {
+    const event = await this.live.findByIdWithCreator(id);
+    if (!event) throw notFound("live event");
+    const isOwner = !!userId && event.creatorUserId === userId;
+    const owned =
+      isOwner ||
+      (!!userId && !!(await this.entitlements.findActive(userId, "liveEventId", id)));
+    return { ...event, owned, isOwner };
   }
 
   listByCreator(creatorId: string): Promise<LiveEvent[]> {
