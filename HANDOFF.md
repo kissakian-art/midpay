@@ -1,19 +1,32 @@
 # MidPay — Session Handoff
 
 Living status doc for picking up work in a fresh session. Last updated
-2026-07-29 (commit `0c844ac`, backend Version `ba6335e6`). This session:
-**removed the music feature entirely** (product decision — a post's only audio
-is the video's own); made photos AND videos render **contain, not cover** (16:9
-shows whole, no crop/zoom); added a **100-video on-device LRU cache** (free
-videos); bounded the feed to an **active+next video-decoder window** (low-end
-crash mitigation); let creators **delete their own posts**; built a **creator
-analytics/earnings dashboard** (earnings over time, per-post performance, live
-peak viewers, per-video view counts) — deployed + migrated (D1 `0010` adds
-`content.view_count`); moved the camera Photo/Video toggle + flip control down
-by the shutter; fixed the T&C modal buttons colliding with the Android nav bar;
-and set up a **ZEGOCLOUD project** for future live video (AppID `15666683`,
-[[zego-live-project]]) — live itself still deferred. All committed to `main` and
-pushed; backend deployed + migrated.
+2026-07-30 (branch `live-phase-a`). This session:
+**fixed the feed's native crash on the last item** — a Samsung S21 Ultra closed
+to the home screen on reaching the end of the feed; cause was
+`removeClippedSubviews={true}` detaching a SurfaceView-backed `expo-video` cell
+(a documented Android FlatList+video footgun), NOT decoder exhaustion (flagship).
+Set `removeClippedSubviews={false}` in [`FeedScreen`](app/src/screens/FeedScreen.tsx);
+`windowSize={3}` + the preload window already bound memory. **Awaiting on-device
+confirmation** (user builds one APK with this + live below; no local adb/SDK, so
+logcat wasn't captured — this fix targets the most likely cause).
+
+Also built **Live — Phase A (JS-only, ships without a new native module):** the
+whole live experience *minus the video pixels*. Backend `GET /live/active`
+(discovery) + `GET /live/:id` enriched with `owned`/`isOwner` (optional auth);
+app **GoLive / LiveViewer / LiveDiscovery** screens, a shared **`LiveStage`** +
+**`useLiveRoom`** hook (chat / reactions / live viewer-count over the existing
+LiveRoom DO socket), and the **`live_ticket` paywall** (reuses checkout+devSettle).
+Verified end-to-end against the deployed backend (schedule→live→discover→ticket→
+owned→end). Backend **deployed**; app changes committed to `live-phase-a`.
+
+**Live video = Phase B, deliberately deferred.** The camera-broadcast + viewer
+video surface drops into `LiveStage`'s `videoSlot`. Blocked on confirming ZEGO's
+RN SDK works on **RN 0.86 + New Architecture + Expo** (no official Expo plugin,
+no documented New-Arch support — same risk class that blocked VisionCamera).
+**ZEGO support reached out** — questions prepared to resolve exactly this before
+any native build; weigh LiveKit (official Expo plugin) if ZEGO can't. See
+[[zego-live-project]].
 
 **Lip-sync recording + "use this sound" reuse were built then removed** in the
 same session as part of dropping music — don't resurrect them from git without
@@ -243,8 +256,12 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
   Only real path to filtered video = **server-side ffmpeg transcode** (deliberate
   infra decision) OR wait for v5 to add filtered recording. Don't spend an EAS
   build chasing the v4 path — verified dead.
-- **Live streaming video** — chat backbone (LiveRoom DO) exists; needs Agora/ZEGO
-  account + SDK + live UI.
+- **Live — Phase A DONE (JS-only), Phase B = video pending.** Phase A shipped the
+  full live surface minus video: discovery (`GET /live/active`), owned/isOwner on
+  `GET /live/:id`, GoLive/Viewer/Discovery screens, `LiveStage` + `useLiveRoom`
+  (chat/reactions/viewer-count), `live_ticket` paywall — all verified. Phase B =
+  the real broadcaster/viewer video into `LiveStage.videoSlot`, blocked on the
+  ZEGO RN-0.86/New-Arch/Expo compatibility answer ([[zego-live-project]]).
 - ~~Admin web console UI~~ — **DONE** (§5a), incl. creator lookup by
   @handle/phone/creator-id. Follow-ups if wanted: audit-log viewer, and a
   moderation deep-link from a reported target to its content/creator.

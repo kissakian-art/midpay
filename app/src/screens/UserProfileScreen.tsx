@@ -285,13 +285,22 @@ export default function UserProfileScreen({ route, navigation }: any) {
       </View>
 
       {isSelf ? (
-        <TouchableOpacity
-          style={s.earningsBtn}
-          onPress={() => navigation.navigate("CreatorAnalytics")}
-          activeOpacity={0.85}
-        >
-          <Text style={s.earningsBtnText}>📊  Your earnings &amp; stats</Text>
-        </TouchableOpacity>
+        <>
+          <TouchableOpacity
+            style={s.goLiveBtn}
+            onPress={() => navigation.navigate("GoLive")}
+            activeOpacity={0.85}
+          >
+            <Text style={s.goLiveBtnText}>🔴  Go Live</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={s.earningsBtn}
+            onPress={() => navigation.navigate("CreatorAnalytics")}
+            activeOpacity={0.85}
+          >
+            <Text style={s.earningsBtnText}>📊  Your earnings &amp; stats</Text>
+          </TouchableOpacity>
+        </>
       ) : null}
 
       {prof?.bio ? <Text style={s.bio}>{prof.bio}</Text> : null}
@@ -504,6 +513,15 @@ const s = StyleSheet.create({
     borderColor: colors.border,
   },
   earningsBtnText: { color: colors.text, fontWeight: "800", fontSize: 14 },
+  goLiveBtn: {
+    marginTop: 12,
+    width: "100%",
+    backgroundColor: colors.danger,
+    borderRadius: 10,
+    paddingVertical: 13,
+    alignItems: "center",
+  },
+  goLiveBtnText: { color: "#fff", fontWeight: "900", fontSize: 14 },
   bio: { color: colors.text, textAlign: "center", marginTop: 16, lineHeight: 20 },
   tabRow: {
     flexDirection: "row",

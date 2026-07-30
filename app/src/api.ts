@@ -14,6 +14,11 @@ export function setAuthToken(t: string | null): void {
 export function authHeaders(): Record<string, string> {
   return token ? { authorization: `Bearer ${token}` } : {};
 }
+/** The raw session token — needed by the live-chat WebSocket, which (unlike
+ *  fetch) can't send an Authorization header, so auth rides a query param. */
+export function getAuthToken(): string | null {
+  return token;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -322,6 +327,86 @@ export const devSettle = (txRef: string, amountUgx: number) =>
     method: "POST",
     json: { event: "charge.completed", data: { tx_ref: txRef, status: "successful", amount: amountUgx, currency: "UGX" } },
   });
+
+// --- Live ---
+export type LiveStatus = "scheduled" | "live" | "ended" | "terminated" | "cancelled";
+
+/** A live event (mirrors the backend `live_events` row). Timestamps arrive as
+ *  ISO strings (Hono serializes Dates), or null. */
+export interface LiveEvent {
+  id: string;
+  creatorId: string;
+  title: string | null;
+  description: string | null;
+  declaredDurationMin: number;
+  ticketPriceUgx: number;
+  priceFloorAppliedUgx: number;
+  status: LiveStatus;
+  scheduledStartAt: string | null;
+  startedAt: string | null;
+  endedAt: string | null;
+  peakConcurrentViewers: number;
+  ticketsSold: number;
+  streamingMinutesConsumed: number;
+  replayR2Key: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+/** A live event decorated with its creator's public identity (discovery). */
+export interface LiveEventWithCreator extends LiveEvent {
+  creatorUserId: string;
+  creatorHandle: string;
+  creatorDisplayName: string | null;
+  creatorAvatarR2Key: string | null;
+}
+
+/** A live event plus the caller's access flags (viewer screen). */
+export interface LiveEventForViewer extends LiveEventWithCreator {
+  owned: boolean;
+  isOwner: boolean;
+}
+
+/** Everyone currently broadcasting (discovery surface). Public. */
+export const activeLives = () =>
+  req<{ lives: LiveEventWithCreator[] }>("/live/active");
+
+/** One live event with the caller's owned/isOwner flags resolved. */
+export const getLive = (id: string) =>
+  req<{ live: LiveEventForViewer }>(`/live/${id}`);
+
+/** The §3.3 duration-scaled ticket price floor, for the schedule form. */
+export const quoteLiveFloor = (declaredDurationMin: number) =>
+  req<{ floor: number }>("/live/quote-floor", {
+    method: "POST",
+    json: { declaredDurationMin },
+  });
+
+export const scheduleLive = (input: {
+  title?: string;
+  description?: string;
+  declaredDurationMin: number;
+  ticketPriceUgx: number;
+  scheduledStartAt?: number;
+}) => req<{ live: LiveEvent }>("/live", { method: "POST", json: input });
+
+export const startLive = (id: string) =>
+  req<{ live: LiveEvent }>(`/live/${id}/start`, { method: "POST" });
+
+export const endLive = (id: string) =>
+  req<{ live: LiveEvent }>(`/live/${id}/end`, { method: "POST" });
+
+/** Current viewer count (public; also delivered live over the chat socket). */
+export const liveStats = (id: string) =>
+  req<{ viewers: number }>(`/live/${id}/chat/stats`);
+
+/** WebSocket URL for a live event's chat/reactions/presence room. Auth rides a
+ *  `token` query param because RN WebSocket can't set headers. */
+export function liveChatWsUrl(id: string): string {
+  const base = API_URL.replace(/^http/, "ws");
+  const t = getAuthToken();
+  return `${base}/live/${id}/chat${t ? `?token=${encodeURIComponent(t)}` : ""}`;
+}
 
 // --- Messaging ---
 export const conversations = () =>

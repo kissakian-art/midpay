@@ -12,7 +12,10 @@ import AdminScreen from "./src/screens/AdminScreen";
 import ConversationScreen from "./src/screens/ConversationScreen";
 import CreatorAnalyticsScreen from "./src/screens/CreatorAnalyticsScreen";
 import FeedScreen from "./src/screens/FeedScreen";
+import GoLiveScreen from "./src/screens/GoLiveScreen";
 import InboxScreen from "./src/screens/InboxScreen";
+import LiveDiscoveryScreen from "./src/screens/LiveDiscoveryScreen";
+import LiveViewerScreen from "./src/screens/LiveViewerScreen";
 import LoginScreen from "./src/screens/LoginScreen";
 import PostViewerScreen from "./src/screens/PostViewerScreen";
 import SearchScreen from "./src/screens/SearchScreen";
@@ -159,6 +162,21 @@ function Root() {
               headerStyle: { backgroundColor: colors.bg },
               headerTintColor: colors.text,
             })}
+          />
+          <Stack.Screen
+            name="LiveDiscovery"
+            component={LiveDiscoveryScreen}
+            options={{
+              title: "Live now",
+              headerStyle: { backgroundColor: colors.bg },
+              headerTintColor: colors.text,
+            }}
+          />
+          <Stack.Screen name="GoLive" component={GoLiveScreen} options={{ headerShown: false }} />
+          <Stack.Screen
+            name="LiveViewer"
+            component={LiveViewerScreen}
+            options={{ headerShown: false }}
           />
         </>
       ) : (
