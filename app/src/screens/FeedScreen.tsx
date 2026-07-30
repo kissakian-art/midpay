@@ -110,7 +110,13 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
         windowSize={3}
         initialNumToRender={2}
         maxToRenderPerBatch={2}
-        removeClippedSubviews
+        // removeClippedSubviews DETACHES off-screen cells from the native view
+        // tree — a documented Android crash/black-video footgun when those cells
+        // hold a SurfaceView-backed expo-video player (the app closes to the home
+        // screen as you reach the end of the feed). windowSize={3} already caps
+        // mounted cells and the preload window frees decoders, so this bought us
+        // nothing but the crash. Keep it OFF for the video feed.
+        removeClippedSubviews={false}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -122,6 +128,12 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
           />
         }
       />
+
+      {/* LIVE shortcut (top-left) — jump to who's broadcasting now. */}
+      <TouchableOpacity style={s.liveBtn} onPress={() => navigation.navigate("LiveDiscovery")} hitSlop={10}>
+        <View style={s.liveDot} />
+        <Text style={s.liveText}>LIVE</Text>
+      </TouchableOpacity>
 
       {/* Search shortcut (top-right, TikTok-style). */}
       <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate("Search")} hitSlop={10}>
@@ -151,4 +163,18 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   searchIcon: { fontSize: 20 },
+  liveBtn: {
+    position: "absolute",
+    top: 52,
+    left: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    height: 40,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    backgroundColor: "rgba(0,0,0,0.35)",
+  },
+  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
+  liveText: { color: "#fff", fontWeight: "900", fontSize: 13, letterSpacing: 0.5 },
 });
