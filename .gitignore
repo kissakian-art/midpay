@@ -4,5 +4,13 @@ dist/
 .dev.vars
 *.log
 
+# Credentials / secrets — NEVER commit these
+Generated API key.txt
+*.env
+.env
+.env.*
+*.secret
+*credentials*
+
 # Drizzle generated migrations are committed; local D1 state is not.
 .mf/
