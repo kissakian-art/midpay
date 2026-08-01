@@ -96,6 +96,7 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
             onOpenProfile={(it) =>
               navigation.navigate("UserProfile", { userId: it.creatorUserId })
             }
+            onOpenLive={() => navigation.navigate("LiveDiscovery")}
           />
         )}
         pagingEnabled
@@ -129,12 +130,6 @@ export default function FeedScreen({ navigation }: { navigation: any }) {
         }
       />
 
-      {/* LIVE shortcut (top-left) — jump to who's broadcasting now. */}
-      <TouchableOpacity style={s.liveBtn} onPress={() => navigation.navigate("LiveDiscovery")} hitSlop={10}>
-        <View style={s.liveDot} />
-        <Text style={s.liveText}>LIVE</Text>
-      </TouchableOpacity>
-
       {/* Search shortcut (top-right, TikTok-style). */}
       <TouchableOpacity style={s.searchBtn} onPress={() => navigation.navigate("Search")} hitSlop={10}>
         <Text style={s.searchIcon}>🔍</Text>
@@ -163,18 +158,4 @@ const s = StyleSheet.create({
     justifyContent: "center",
   },
   searchIcon: { fontSize: 20 },
-  liveBtn: {
-    position: "absolute",
-    top: 52,
-    left: 14,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    height: 40,
-    paddingHorizontal: 12,
-    borderRadius: 20,
-    backgroundColor: "rgba(0,0,0,0.35)",
-  },
-  liveDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: colors.danger },
-  liveText: { color: "#fff", fontWeight: "900", fontSize: 13, letterSpacing: 0.5 },
 });

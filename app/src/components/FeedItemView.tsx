@@ -46,6 +46,8 @@ interface Props {
   onOpenComments: (item: FeedItem) => void;
   onMessageCreator: (item: FeedItem) => void;
   onOpenProfile: (item: FeedItem) => void;
+  /** When set, a LIVE shortcut appears atop the action rail (feed only). */
+  onOpenLive?: () => void;
 }
 
 const SCRUB_MARGIN = 12;
@@ -84,6 +86,7 @@ export default function FeedItemView({
   onOpenComments,
   onMessageCreator,
   onOpenProfile,
+  onOpenLive,
 }: Props) {
   const { user } = useAuth();
   const { width } = useWindowDimensions();
@@ -384,6 +387,15 @@ export default function FeedItemView({
 
       {/* Right rail: actions */}
       <View style={s.rail}>
+        {/* LIVE shortcut (feed only) — sits with the actions, not over the
+            video, so it doesn't read as "this clip is live". */}
+        {onOpenLive ? (
+          <TouchableOpacity style={s.action} onPress={onOpenLive}>
+            <Text style={[s.actionIcon, { color: colors.danger }]}>◉</Text>
+            <Text style={[s.actionLabel, { color: colors.danger }]}>LIVE</Text>
+          </TouchableOpacity>
+        ) : null}
+
         {/* Creator avatar with the TikTok-style follow shortcut */}
         <View style={s.avatarWrap}>
           <TouchableOpacity onPress={() => onOpenProfile(item)} activeOpacity={0.8}>
