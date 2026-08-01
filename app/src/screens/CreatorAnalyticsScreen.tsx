@@ -48,6 +48,9 @@ export default function CreatorAnalyticsScreen() {
   }, [load]);
 
   const rangeLabel = RANGES.find((r) => r.key === range)?.label ?? "";
+  // This is an EARNINGS screen, so the per-post breakdown only lists paid posts
+  // (free posts make no money — they're covered by the engagement totals above).
+  const paidPosts = data?.perPost.filter((p) => p.pricing === "paid") ?? [];
 
   return (
     <ScrollView
@@ -120,12 +123,14 @@ export default function CreatorAnalyticsScreen() {
             </>
           ) : null}
 
-          {/* Per-post performance */}
-          <Text style={s.section}>Your posts</Text>
-          {data.perPost.length === 0 ? (
-            <Text style={s.empty}>No posts yet.</Text>
+          {/* Per-post earnings — paid posts only */}
+          <Text style={s.section}>Earnings by post</Text>
+          {paidPosts.length === 0 ? (
+            <Text style={s.empty}>
+              No paid posts yet. Set a price on a video or photo and its sales will show here.
+            </Text>
           ) : (
-            data.perPost.map((p) => (
+            paidPosts.map((p) => (
               <View key={p.id} style={s.rowCard}>
                 <Text style={s.rowTitle} numberOfLines={1}>
                   {kindIcon(p.kind)}  {p.title || "Untitled"}
@@ -134,21 +139,17 @@ export default function CreatorAnalyticsScreen() {
                   <Text style={s.rowStat}>👁 {p.views}</Text>
                   <Text style={s.rowStat}>♥ {p.likes}</Text>
                   <Text style={s.rowStat}>💬 {p.comments}</Text>
-                  {p.pricing === "paid" ? (
-                    <Text style={s.rowStat}>
-                      🛒 {p.sales} · {ugx(p.earningsUgx)}
-                    </Text>
-                  ) : (
-                    <Text style={s.rowStatFree}>Free</Text>
-                  )}
+                  <Text style={s.rowStatEarn}>
+                    🛒 {p.sales} · {ugx(p.earningsUgx)}
+                  </Text>
                 </View>
               </View>
             ))
           )}
 
           <Text style={s.footnote}>
-            Earnings are your share after the platform fee. Per-post sales and earnings reflect the
-            selected window.
+            Earnings are your share after the platform fee, for the selected window. Free posts
+            aren't listed here — see the totals above for their reach.
           </Text>
         </>
       )}
@@ -237,7 +238,7 @@ const s = StyleSheet.create({
   rowTitle: { color: colors.text, fontWeight: "700", fontSize: 14 },
   rowStatsWrap: { flexDirection: "row", gap: 16, marginTop: 8, flexWrap: "wrap" },
   rowStat: { color: colors.dim, fontSize: 13, fontWeight: "600" },
-  rowStatFree: { color: colors.dim, fontSize: 13, fontWeight: "700" },
+  rowStatEarn: { color: colors.accent, fontSize: 13, fontWeight: "800" },
   empty: { color: colors.dim, textAlign: "center", marginTop: 20 },
   footnote: { color: colors.dim, fontSize: 11, marginTop: 20, lineHeight: 16 },
 });
