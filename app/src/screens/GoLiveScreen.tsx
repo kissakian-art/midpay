@@ -22,6 +22,7 @@ import {
 } from "../api";
 import { useAuth } from "../auth";
 import LiveStage from "../components/LiveStage";
+import LiveVideoStage from "../live/LiveVideoStage";
 import { colors, ugx } from "../theme";
 
 const DURATION_PRESETS = [15, 30, 60, 120];
@@ -154,10 +155,17 @@ export default function GoLiveScreen({ navigation }: { navigation: any }) {
           </TouchableOpacity>
         }
         videoSlot={
-          <Placeholder
-            emoji="📷"
-            title="Your camera preview goes here"
-            body="Live video streaming is being switched on. Chat, reactions and viewer counts are already live — this is the broadcaster control room."
+          <LiveVideoStage
+            liveId={event.id}
+            mode="broadcast"
+            creatorHandle={user?.handle ?? "you"}
+            fallback={
+              <Placeholder
+                emoji="📷"
+                title="Your camera preview goes here"
+                body="Live video isn't switched on yet (LiveKit keys not set). Chat, reactions and viewer counts are already live — this is the broadcaster control room."
+              />
+            }
           />
         }
       />

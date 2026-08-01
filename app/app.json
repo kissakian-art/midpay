@@ -43,7 +43,8 @@
         }
       ],
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      "@livekit/react-native-expo-plugin"
     ],
     "extra": {
       "apiUrl": "https://midpay-backend.midpay.workers.dev",

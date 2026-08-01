@@ -400,6 +400,16 @@ export const endLive = (id: string) =>
 export const liveStats = (id: string) =>
   req<{ viewers: number }>(`/live/${id}/chat/stats`);
 
+/**
+ * A scoped LiveKit access token for the video room (Phase B). The broadcaster
+ * gets `canPublish`; a ticket-holder gets subscribe-only. 503
+ * `live_video_unconfigured` until the LiveKit keys are set on the backend.
+ */
+export const liveToken = (id: string) =>
+  req<{ token: string; url: string; canPublish: boolean }>(`/live/${id}/token`, {
+    method: "POST",
+  });
+
 /** WebSocket URL for a live event's chat/reactions/presence room. Auth rides a
  *  `token` query param because RN WebSocket can't set headers. */
 export function liveChatWsUrl(id: string): string {

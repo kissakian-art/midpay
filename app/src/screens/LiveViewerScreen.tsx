@@ -16,6 +16,7 @@ import {
 } from "../api";
 import Avatar from "../components/Avatar";
 import LiveStage from "../components/LiveStage";
+import LiveVideoStage from "../live/LiveVideoStage";
 import { Placeholder } from "./GoLiveScreen";
 import { colors, ugx } from "../theme";
 
@@ -136,10 +137,17 @@ export default function LiveViewerScreen({ route, navigation }: { route: any; na
       title={event.title}
       creatorHandle={event.creatorHandle}
       videoSlot={
-        <Placeholder
-          emoji="📺"
-          title={`@${event.creatorHandle}'s video will appear here`}
-          body="Live video is being switched on. You're in the room — chat, reactions and the live viewer count are working now."
+        <LiveVideoStage
+          liveId={event.id}
+          mode="watch"
+          creatorHandle={event.creatorHandle}
+          fallback={
+            <Placeholder
+              emoji="📺"
+              title={`@${event.creatorHandle}'s video will appear here`}
+              body="Live video isn't switched on yet (LiveKit keys not set). You're in the room — chat, reactions and the live viewer count are working now."
+            />
+          }
         />
       }
     />
