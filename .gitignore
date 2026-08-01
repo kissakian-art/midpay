@@ -11,6 +11,8 @@ Generated API key.txt
 .env.*
 *.secret
 *credentials*
+# ...except the values-free registry doc, which is meant to be committed.
+!CREDENTIALS.md
 
 # Drizzle generated migrations are committed; local D1 state is not.
 .mf/
