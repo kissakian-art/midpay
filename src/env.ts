@@ -25,6 +25,12 @@ export interface Env {
   // The secret hash you configure in the Flutterwave dashboard webhook; every
   // incoming webhook must present it in the `verif-hash` header (§3.1).
   FLW_WEBHOOK_HASH?: string;
+  // LiveKit Cloud (live video, Phase B). Key+secret are secrets (`wrangler
+  // secret put`); URL is the public project endpoint (a [vars] value). Optional
+  // — the live-token endpoint returns `live_video_unconfigured` until all set.
+  LIVEKIT_API_KEY?: string;
+  LIVEKIT_API_SECRET?: string;
+  LIVEKIT_URL?: string;
 
   // Business-rule config DEFAULTS (§7.2). Live values come from platform_config.
   LIVE_MIN_PRICE_PER_HOUR: string;

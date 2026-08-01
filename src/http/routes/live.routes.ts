@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { verify } from "hono/jwt";
-import { ApiError, badRequest } from "../../services/errors";
+import { ApiError, badRequest, forbidden } from "../../services/errors";
+import { mintLiveKitToken } from "../../services/livekit";
 import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
 import { optionalInt, optionalString, readJson, requireInt, requireParam } from "../util";
@@ -95,4 +96,35 @@ liveRoutes.post("/:id/start", async (c) => {
 liveRoutes.post("/:id/end", async (c) => {
   const event = await c.get("container").live.end(c.req.param("id"), c.get("userId"));
   return c.json({ live: event });
+});
+
+// Mint a LiveKit access token for the video room (Phase B). The broadcaster
+// (event owner) gets publish rights; a ticket-holder gets subscribe-only;
+// anyone without access is refused. 503 until the LiveKit keys are configured.
+liveRoutes.post("/:id/token", async (c) => {
+  const userId = c.get("userId");
+  const container = c.get("container");
+  const event = await container.live.getForViewer(c.req.param("id"), userId);
+  if (event.status !== "live") {
+    throw badRequest("not_live", `Event is ${event.status}`);
+  }
+  // owned = the broadcaster themselves OR a viewer holding a ticket.
+  if (!event.owned) {
+    throw forbidden("Buy a ticket to join this live");
+  }
+
+  const { LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL } = c.env;
+  if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET || !LIVEKIT_URL) {
+    throw new ApiError(503, "live_video_unconfigured", "Live video isn't set up yet");
+  }
+
+  const user = await container.users.findById(userId);
+  const token = await mintLiveKitToken({
+    apiKey: LIVEKIT_API_KEY,
+    apiSecret: LIVEKIT_API_SECRET,
+    identity: userId,
+    name: user?.handle,
+    grant: { room: event.id, canPublish: event.isOwner, canSubscribe: true },
+  });
+  return c.json({ token, url: LIVEKIT_URL, canPublish: event.isOwner });
 });

@@ -61,6 +61,11 @@ FREE_CONTENT_MINUTES = "100"
 # Paid PHOTO price floor (UGX). Lower than video (RECORDED_PRICE_FLOOR) — a photo
 # is a lower-value, near-zero-cost item, so a lower floor lifts impulse buys.
 PHOTO_PRICE_FLOOR = "2000"
+# LiveKit Cloud project URL for live video (Phase B). NOT a secret — set it to
+# your project endpoint, e.g. "wss://yourproject.livekit.cloud". The API key +
+# secret are set separately via `wrangler secret put LIVEKIT_API_KEY` /
+# `LIVEKIT_API_SECRET`. Empty = live video disabled (token endpoint 503s).
+LIVEKIT_URL = ""
 FLUTTERWAVE_FEE_PERCENT = "3"
 MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT = "0.5"
 # Minimum available balance (UGX) for a creator to be included in a payout batch
