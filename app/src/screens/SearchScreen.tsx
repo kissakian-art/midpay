@@ -43,7 +43,8 @@ export default function SearchScreen({ navigation }: { navigation: any }) {
     return () => clearTimeout(t);
   }, [q]);
 
-  const openPost = (item: FeedItem) => navigation.navigate("PostViewer", { item });
+  const openPost = (index: number) =>
+    navigation.navigate("PostViewer", { items: results?.posts ?? [], index });
   const openComment = async (contentId: string) => {
     try {
       const { item } = await getCard(contentId);
@@ -132,8 +133,8 @@ export default function SearchScreen({ navigation }: { navigation: any }) {
 
             {results.posts.length > 0 && (
               <Section title="Posts">
-                {results.posts.map((p) => (
-                  <TouchableOpacity key={p.id} style={s.row} onPress={() => openPost(p)}>
+                {results.posts.map((p, i) => (
+                  <TouchableOpacity key={p.id} style={s.row} onPress={() => openPost(i)}>
                     {p.thumbnailR2Key ? (
                       <Image source={{ uri: thumbnailUrl(p.id, p.thumbnailR2Key) }} style={s.thumb} />
                     ) : (

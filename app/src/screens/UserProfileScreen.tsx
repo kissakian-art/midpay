@@ -334,11 +334,11 @@ export default function UserProfileScreen({ route, navigation }: any) {
           />
         }
         ListEmptyComponent={<Text style={s.empty}>No posts yet</Text>}
-        renderItem={({ item }) => (
+        renderItem={({ item, index }) => (
           <TouchableOpacity
             style={[s.gridCell, { width: cell, height: cell * 1.4 }]}
             activeOpacity={0.85}
-            onPress={() => navigation.navigate("PostViewer", { item })}
+            onPress={() => navigation.navigate("PostViewer", { items: posts, index })}
             onLongPress={isSelf ? () => confirmDelete(item) : undefined}
           >
             {item.thumbnailR2Key ? (
