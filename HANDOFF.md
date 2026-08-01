@@ -1,32 +1,46 @@
 # MidPay — Session Handoff
 
 Living status doc for picking up work in a fresh session. Last updated
-2026-07-30 (branch `live-phase-a`). This session:
-**fixed the feed's native crash on the last item** — a Samsung S21 Ultra closed
-to the home screen on reaching the end of the feed; cause was
-`removeClippedSubviews={true}` detaching a SurfaceView-backed `expo-video` cell
-(a documented Android FlatList+video footgun), NOT decoder exhaustion (flagship).
-Set `removeClippedSubviews={false}` in [`FeedScreen`](app/src/screens/FeedScreen.tsx);
-`windowSize={3}` + the preload window already bound memory. **Awaiting on-device
-confirmation** (user builds one APK with this + live below; no local adb/SDK, so
-logcat wasn't captured — this fix targets the most likely cause).
+2026-08-01 (`live-phase-b` merged to `main`). Recent work:
 
-Also built **Live — Phase A (JS-only, ships without a new native module):** the
-whole live experience *minus the video pixels*. Backend `GET /live/active`
-(discovery) + `GET /live/:id` enriched with `owned`/`isOwner` (optional auth);
-app **GoLive / LiveViewer / LiveDiscovery** screens, a shared **`LiveStage`** +
-**`useLiveRoom`** hook (chat / reactions / live viewer-count over the existing
-LiveRoom DO socket), and the **`live_ticket` paywall** (reuses checkout+devSettle).
-Verified end-to-end against the deployed backend (schedule→live→discover→ticket→
-owned→end). Backend **deployed**; app changes committed to `live-phase-a`.
+**Feed crash fix (confirmed on device).** A Samsung S21 Ultra closed to the home
+screen on the last feed item — cause was `removeClippedSubviews={true}` detaching
+a SurfaceView-backed `expo-video` cell (a documented Android FlatList+video
+footgun), NOT decoder exhaustion. Set `removeClippedSubviews={false}` in
+[`FeedScreen`](app/src/screens/FeedScreen.tsx); `windowSize={3}` + the preload
+window already bound memory. Same fix applied to the new swipeable PostViewer.
 
-**Live video = Phase B, deliberately deferred.** The camera-broadcast + viewer
-video surface drops into `LiveStage`'s `videoSlot`. Blocked on confirming ZEGO's
-RN SDK works on **RN 0.86 + New Architecture + Expo** (no official Expo plugin,
-no documented New-Arch support — same risk class that blocked VisionCamera).
-**ZEGO support reached out** — questions prepared to resolve exactly this before
-any native build; weigh LiveKit (official Expo plugin) if ZEGO can't. See
-[[zego-live-project]].
+**Live — FULLY BUILT (Phase A + B), working on a real device.**
+- **Phase A (JS-only):** `GET /live/active` (discovery) + `GET /live/:id` with
+  `owned`/`isOwner`; app **GoLive / LiveViewer / LiveDiscovery** screens; shared
+  **`LiveStage`** + **`useLiveRoom`** hook (chat / reactions / viewer-count over
+  the LiveRoom DO socket); **`live_ticket` paywall** (reuses checkout+devSettle).
+- **Phase B — video via LiveKit Cloud.** Chose LiveKit over ZEGO (ZEGO's RN SDK
+  is Legacy-arch only → breaks under Fabric/RN 0.86; LiveKit works on New Arch).
+  Backend `POST /live/:id/token` mints a scoped LiveKit JWT (broadcaster=publish,
+  ticket-holder=subscribe) via [`livekit.ts`](src/services/livekit.ts). App
+  [`LiveVideoStage`](app/src/live/LiveVideoStage.tsx) joins the room and shows the
+  local camera (broadcast) or the broadcaster's remote camera (watch) inside
+  `LiveStage.videoSlot`. Deps: `@livekit/react-native` (+ -webrtc, -expo-plugin,
+  `livekit-client`); `registerGlobals()` in [`index.ts`](app/index.ts); plugin in
+  `app.json`; **`app/.npmrc` `legacy-peer-deps=true`** (needed for EAS installs);
+  expo-doctor exclusion for the cosmetic New-Arch warning. **Gotcha fixed:** the
+  broadcaster camera got stuck on "starting your camera" — must (1) get camera+mic
+  permission before connecting and (2) explicitly `setCameraEnabled(true)` via
+  `useLocalParticipant`, not rely on the room's auto-publish props.
+  **Secrets/config set:** `LIVEKIT_API_KEY` + `LIVEKIT_API_SECRET` (wrangler
+  secrets), `LIVEKIT_URL` (wrangler var, `wss://midpay-255vs383.livekit.cloud`).
+  LiveKit Cloud project `midpay`. See [[zego-live-project]].
+
+**Other UX fixes (all JS):** the post viewer (from a profile grid or search) is a
+**swipeable feed** now, not a dead-end single post; **"Your earnings"** per-post
+list is PAID-only ("Earnings by post"); the **LIVE** shortcut moved from a
+top-left pill (which read as "this clip is live") into the right action rail,
+feed-only.
+
+**Credentials:** [`CREDENTIALS.md`](CREDENTIALS.md) is a values-free registry of
+every secret/config, where it's stored, and how to rotate it. Local secret files
+are gitignored; actual values live in a password manager, never in the repo.
 
 **Lip-sync recording + "use this sound" reuse were built then removed** in the
 same session as part of dropping music — don't resurrect them from git without
@@ -256,12 +270,12 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
   Only real path to filtered video = **server-side ffmpeg transcode** (deliberate
   infra decision) OR wait for v5 to add filtered recording. Don't spend an EAS
   build chasing the v4 path — verified dead.
-- **Live — Phase A DONE (JS-only), Phase B = video pending.** Phase A shipped the
-  full live surface minus video: discovery (`GET /live/active`), owned/isOwner on
-  `GET /live/:id`, GoLive/Viewer/Discovery screens, `LiveStage` + `useLiveRoom`
-  (chat/reactions/viewer-count), `live_ticket` paywall — all verified. Phase B =
-  the real broadcaster/viewer video into `LiveStage.videoSlot`, blocked on the
-  ZEGO RN-0.86/New-Arch/Expo compatibility answer ([[zego-live-project]]).
+- **Live — FULLY BUILT (Phase A + B), working on device.** Discovery, owned/
+  isOwner, GoLive/Viewer/Discovery screens, `LiveStage` + `useLiveRoom` (chat/
+  reactions/viewer-count), `live_ticket` paywall, AND real video via **LiveKit
+  Cloud** (token endpoint + `LiveVideoStage`). Polish backlog only: replays/
+  recording (`replayR2Key` exists, unused), reconnection UX, HD-vs-SD toggle,
+  and calibrating the live price floor against real LiveKit per-viewer cost.
 - ~~Admin web console UI~~ — **DONE** (§5a), incl. creator lookup by
   @handle/phone/creator-id. Follow-ups if wanted: audit-log viewer, and a
   moderation deep-link from a reported target to its content/creator.
@@ -306,7 +320,8 @@ by the Worker at **https://midpay-backend.midpay.workers.dev/console**.
 | GitHub | ✅ `kissakian-art/midpay` |
 | Flutterwave keys | ⏳ business verification in progress (last launch blocker) |
 | SMS provider | ✅ **no longer needed** (mobile+password auth) |
-| ZEGOCLOUD (live video) | ⏳ project created (trial, AppID 15666683, Live Streaming product); SDK/UI not built; live still deferred ([[zego-live-project]]). Owner to ROTATE ServerSecret before launch. |
+| LiveKit Cloud (live video) | ✅ **LIVE** — project `midpay`, `LIVEKIT_API_KEY`/`_SECRET` set as Worker secrets, `LIVEKIT_URL` var set. Free tier. Video works on device. |
+| ~~ZEGOCLOUD~~ (live video) | ❌ abandoned — RN SDK is Legacy-arch only, breaks on RN 0.86/New Arch. Replaced by LiveKit. AppID 15666683 unused ([[zego-live-project]]). |
 | Google Play ($25) | ❌ only if Play Store wanted |
 
 D1 `midpay` id `d8b4a6c5-e94c-4164-a752-390e9302644c`. **Cost:** ~$0/month fixed;
