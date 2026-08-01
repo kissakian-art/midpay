@@ -2,6 +2,7 @@ import {
   AudioSession,
   isTrackReference,
   LiveKitRoom,
+  useLocalParticipant,
   useTracks,
   VideoTrack,
 } from "@livekit/react-native";
@@ -16,14 +17,14 @@ type Mode = "broadcast" | "watch";
 
 /**
  * LiveVideoStage — the real WebRTC video for a live event (Phase B), rendered
- * inside LiveStage's `videoSlot`. It fetches a scoped LiveKit token from our
- * backend, joins the room, and shows the relevant camera track:
+ * inside LiveStage's `videoSlot`.
  *   broadcast → publish + show the LOCAL camera (the broadcaster's own feed)
  *   watch     → subscribe + show the REMOTE camera (the broadcaster's feed)
  *
- * If no token comes back — LiveKit keys not set yet, or any error — it quietly
- * falls back to `fallback` (the placeholder), so the room (chat/reactions) still
- * works and the same build behaves before and after the keys are configured.
+ * Broadcaster start-up is order-sensitive: we (1) get camera+mic permission
+ * BEFORE connecting, and (2) explicitly enable the camera once in the room —
+ * relying on the room's auto-publish props alone left it stuck on "starting
+ * your camera" on Android. On any failure it falls back to `fallback`.
  */
 export default function LiveVideoStage({
   liveId,
@@ -42,14 +43,22 @@ export default function LiveVideoStage({
   const [conn, setConn] = useState<{ url: string; token: string } | null>(null);
   const [failed, setFailed] = useState(false);
 
-  // A broadcaster needs camera + mic before publishing.
+  // Broadcaster: request camera + mic up front, before we ever connect.
   useEffect(() => {
     if (!isBroadcast) return;
-    if (camPerm && !camPerm.granted && camPerm.canAskAgain) requestCam();
-    if (micPerm && !micPerm.granted && micPerm.canAskAgain) requestMic();
-  }, [isBroadcast, camPerm, micPerm, requestCam, requestMic]);
+    (async () => {
+      try {
+        if (!camPerm?.granted) await requestCam();
+        if (!micPerm?.granted) await requestMic();
+      } catch {
+        // handled by the gate below
+      }
+    })();
+    // Only needs to run as the (un)granted state resolves.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isBroadcast, camPerm?.granted, micPerm?.granted]);
 
-  // Get a room token scoped to this user's role (publish vs subscribe).
+  // Scoped LiveKit token from our backend.
   useEffect(() => {
     let alive = true;
     liveToken(liveId)
@@ -60,7 +69,7 @@ export default function LiveVideoStage({
     };
   }, [liveId]);
 
-  // Manage the OS audio session for the duration of the room.
+  // OS audio session for the duration of the room.
   useEffect(() => {
     AudioSession.startAudioSession().catch(() => {});
     return () => {
@@ -69,11 +78,23 @@ export default function LiveVideoStage({
   }, []);
 
   if (failed) return <>{fallback}</>;
-  if (!conn) {
+
+  // A broadcaster must hold camera + mic before we connect with capture on.
+  const needsPerms = isBroadcast && !(camPerm?.granted && micPerm?.granted);
+  if (!conn || needsPerms) {
     return (
       <Centered>
-        <ActivityIndicator color={colors.accent} size="large" />
-        <Text style={s.label}>Connecting to live…</Text>
+        {needsPerms ? (
+          <>
+            <Text style={s.emoji}>🎥</Text>
+            <Text style={s.label}>Allow camera and microphone access to go live.</Text>
+          </>
+        ) : (
+          <>
+            <ActivityIndicator color={colors.accent} size="large" />
+            <Text style={s.label}>Connecting to live…</Text>
+          </>
+        )}
       </Centered>
     );
   }
@@ -87,9 +108,26 @@ export default function LiveVideoStage({
       video={isBroadcast}
       onError={() => setFailed(true)}
     >
+      {isBroadcast ? <EnsureCapture /> : null}
       <RoomStage mode={mode} creatorHandle={creatorHandle} />
     </LiveKitRoom>
   );
+}
+
+/**
+ * Explicitly turn the camera + mic on once we're in the room. The room's
+ * audio/video props are supposed to do this on connect, but on Android that
+ * wasn't reliable — this makes the broadcaster's capture deterministic.
+ * Idempotent, so it's safe alongside the props.
+ */
+function EnsureCapture() {
+  const { localParticipant } = useLocalParticipant();
+  useEffect(() => {
+    if (!localParticipant) return;
+    localParticipant.setCameraEnabled(true).catch(() => {});
+    localParticipant.setMicrophoneEnabled(true).catch(() => {});
+  }, [localParticipant]);
+  return null;
 }
 
 /** Picks the right camera track from the room and renders it full-bleed. */
