@@ -65,7 +65,7 @@ PHOTO_PRICE_FLOOR = "2000"
 # your project endpoint, e.g. "wss://yourproject.livekit.cloud". The API key +
 # secret are set separately via `wrangler secret put LIVEKIT_API_KEY` /
 # `LIVEKIT_API_SECRET`. Empty = live video disabled (token endpoint 503s).
-LIVEKIT_URL = ""
+LIVEKIT_URL = "wss://midpay-255vs383.livekit.cloud"
 FLUTTERWAVE_FEE_PERCENT = "3"
 MOBILE_MONEY_WITHDRAWAL_DUTY_PERCENT = "0.5"
 # Minimum available balance (UGX) for a creator to be included in a payout batch
