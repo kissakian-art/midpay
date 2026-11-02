@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import { createDb } from "../db/client";
 import { liveEvents } from "../db/schema";
 import type { Env } from "../env";
+import { createContainer } from "../http/container";
 
 /**
  * LiveRoom — one Durable Object per live event (§2.4): WebSocket chat,
@@ -24,6 +25,15 @@ import type { Env } from "../env";
 interface Attachment {
   userId: string;
   handle: string;
+  isViewer: boolean;
+  windowStart?: number;
+  messages?: number;
+  accessCheckedAt?: number;
+}
+
+export function uniqueViewerCount(sockets: WebSocket[]): number {
+  return new Set(sockets.filter(ws => ws.readyState === 1).map(ws => ws.deserializeAttachment() as Attachment)
+    .filter(who => who?.isViewer === true).map(who => who.userId)).size;
 }
 
 interface ChatMessage {
@@ -47,6 +57,16 @@ export class LiveRoom {
   async fetch(request: Request): Promise<Response> {
     const url = new URL(request.url);
 
+    // Only the Worker can reach this DO binding; there is no public close route.
+    if (url.pathname === "/close" && request.method === "POST") {
+      await this.ctx.storage.put("closed", true);
+      this.broadcast({ type: "ended" });
+      for (const ws of this.ctx.getWebSockets()) {
+        try { ws.close(4000, "Live event ended"); } catch { /* already closed */ }
+      }
+      return Response.json({ closed: true });
+    }
+
     if (url.pathname === "/connect") {
       if (request.headers.get("upgrade")?.toLowerCase() !== "websocket") {
         return new Response("expected websocket", { status: 426 });
@@ -56,16 +76,28 @@ export class LiveRoom {
       const liveEventId = request.headers.get("x-live-event-id");
       if (!userId || !liveEventId) return new Response("missing identity", { status: 400 });
 
+      // Recheck at the destination so a stale gateway check cannot reopen a
+      // killed event or let an unticketed connection influence commissions.
+      let event;
+      try { event = await createContainer(this.env).live.requireAccess(liveEventId, userId); }
+      catch { return new Response("live access unavailable", { status: 403 }); }
+
       await this.ctx.storage.put("liveEventId", liveEventId);
+      const history = (await this.ctx.storage.get<ChatMessage[]>(HISTORY_KEY)) ?? [];
+      if (await this.ctx.storage.get<boolean>("closed")) return new Response("live ended", { status: 410 });
+      for (const ws of this.ctx.getWebSockets()) {
+        if ((ws.deserializeAttachment() as Attachment)?.userId === userId) {
+          try { ws.close(4001, "Connected on another device"); } catch { /* already closed */ }
+        }
+      }
 
       const pair = new WebSocketPair();
       const client = pair[0];
       const server = pair[1];
       this.ctx.acceptWebSocket(server);
-      server.serializeAttachment({ userId, handle } satisfies Attachment);
+      server.serializeAttachment({ userId, handle, isViewer: !event.isOwner, accessCheckedAt: Date.now() } satisfies Attachment);
 
-      const history = (await this.ctx.storage.get<ChatMessage[]>(HISTORY_KEY)) ?? [];
-      const viewers = this.ctx.getWebSockets().length;
+      const viewers = uniqueViewerCount(this.ctx.getWebSockets());
       server.send(JSON.stringify({ type: "welcome", history, viewers }));
       this.broadcast({ type: "presence", viewers }, server);
       await this.bumpPeak(viewers);
@@ -74,14 +106,15 @@ export class LiveRoom {
     }
 
     if (url.pathname === "/stats") {
-      return Response.json({ viewers: this.ctx.getWebSockets().length });
+      return Response.json({ viewers: await this.ctx.storage.get<boolean>("closed") ? 0 : uniqueViewerCount(this.ctx.getWebSockets()) });
     }
 
     return new Response("not found", { status: 404 });
   }
 
   async webSocketMessage(ws: WebSocket, raw: string | ArrayBuffer): Promise<void> {
-    if (typeof raw !== "string") return;
+    if (await this.ctx.storage.get<boolean>("closed")) { ws.close(4000, "Live event ended"); return; }
+    if (typeof raw !== "string" || raw.length > 4096) { ws.close(1009, "Message too large"); return; }
     let msg: { type?: string; body?: string; emoji?: string };
     try {
       msg = JSON.parse(raw);
@@ -89,6 +122,20 @@ export class LiveRoom {
       return;
     }
     const who = ws.deserializeAttachment() as Attachment;
+    if (!who?.userId) { ws.close(1008, "Missing identity"); return; }
+    const now = Date.now();
+    if (!who.accessCheckedAt || now - who.accessCheckedAt > 30000) {
+      const eventId = await this.ctx.storage.get<string>("liveEventId");
+      try {
+        if (!eventId) throw new Error("missing event");
+        await createContainer(this.env).live.requireAccess(eventId, who.userId);
+        who.accessCheckedAt = now;
+      } catch { ws.close(4003, "Live access no longer available"); return; }
+    }
+    if (!who.windowStart || now - who.windowStart >= 1000) { who.windowStart = now; who.messages = 0; }
+    who.messages = (who.messages ?? 0) + 1;
+    ws.serializeAttachment(who);
+    if (who.messages > 10) return;
 
     if (msg.type === "chat" && typeof msg.body === "string" && msg.body.trim()) {
       const chat: ChatMessage = {
@@ -112,7 +159,7 @@ export class LiveRoom {
   }
 
   async webSocketClose(): Promise<void> {
-    this.broadcast({ type: "presence", viewers: this.ctx.getWebSockets().length });
+    this.broadcast({ type: "presence", viewers: uniqueViewerCount(this.ctx.getWebSockets()) });
   }
 
   private broadcast(payload: unknown, except?: WebSocket): void {
@@ -131,7 +178,6 @@ export class LiveRoom {
   private async bumpPeak(viewers: number): Promise<void> {
     const knownPeak = (await this.ctx.storage.get<number>("peak")) ?? 0;
     if (viewers <= knownPeak) return;
-    await this.ctx.storage.put("peak", viewers);
 
     const liveEventId = await this.ctx.storage.get<string>("liveEventId");
     if (!liveEventId) return;
@@ -141,7 +187,8 @@ export class LiveRoom {
       .set({
         peakConcurrentViewers: sql`max(${liveEvents.peakConcurrentViewers}, ${viewers})`,
       })
-      .where(sql`${liveEvents.id} = ${liveEventId}`)
+      .where(sql`${liveEvents.id} = ${liveEventId} and ${liveEvents.status} = 'live'`)
       .run();
+    await this.ctx.storage.put("peak", viewers);
   }
 }

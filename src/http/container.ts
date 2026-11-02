@@ -19,6 +19,7 @@ import { SocialRepository } from "../repositories/social.repository";
 import { TransactionRepository } from "../repositories/transaction.repository";
 import { UserRepository } from "../repositories/user.repository";
 import { WalletRepository } from "../repositories/wallet.repository";
+import { FinancialRepository } from "../repositories/financial.repository";
 import { AdminAuthService } from "../services/admin/admin-auth.service";
 import { AnalyticsService } from "../services/admin/analytics.service";
 import { CreatorAnalyticsService } from "../services/creator-analytics.service";
@@ -30,6 +31,7 @@ import { BackgroundService } from "../services/background.service";
 import { ConfigService } from "../services/config.service";
 import { ContentService } from "../services/content.service";
 import { LiveService } from "../services/live.service";
+import { LiveShutdownService } from "../services/live-shutdown.service";
 import { MessagingService } from "../services/messaging.service";
 import { MusicService } from "../services/music.service";
 import { SocialService } from "../services/social.service";
@@ -80,6 +82,7 @@ export function createContainer(env: Env): Container {
   const transactions = new TransactionRepository(db);
   const entitlements = new EntitlementRepository(db);
   const wallets = new WalletRepository(db);
+  const financial = new FinancialRepository(db);
   const admins = new AdminRepository(db);
   const audit = new AuditRepository(db);
   const payoutRepo = new PayoutRepository(db);
@@ -98,7 +101,8 @@ export function createContainer(env: Env): Container {
 
   const auth = new AuthService(users, otps, config, env);
   const content = new ContentService(contentRepo, creators, entitlements, config, storage);
-  const live = new LiveService(liveRepo, creators, config, entitlements);
+  const shutdown = new LiveShutdownService(liveRepo, creators, env);
+  const live = new LiveService(liveRepo, creators, config, entitlements, users, shutdown);
   const payments = new PaymentsService(
     users,
     creators,
@@ -106,13 +110,14 @@ export function createContainer(env: Env): Container {
     liveRepo,
     transactions,
     entitlements,
-    wallets,
+    financial,
     config,
     flw,
+    audit,
   );
-  const payouts = new PayoutService(payoutRepo, wallets, creators, users, config, flw, audit);
+  const payouts = new PayoutService(payoutRepo, wallets, creators, users, config, flw, audit, financial, env);
   const adminAuth = new AdminAuthService(admins, audit, env);
-  const moderation = new ModerationService(moderationRepo, contentRepo, entitlements, liveRepo, audit);
+  const moderation = new ModerationService(moderationRepo, contentRepo, entitlements, liveRepo, audit, shutdown);
   const creatorAdmin = new CreatorAdminService(creators, audit, users);
   const configAdmin = new ConfigAdminService(configRepo, audit, env);
   const analytics = new AnalyticsService(analyticsRepo, config);
@@ -121,7 +126,7 @@ export function createContainer(env: Env): Container {
   const profile = new ProfileService(users, storage);
   const messaging = new MessagingService(messagingRepo, users);
   const music = new MusicService(musicRepo, storage);
-  const search = new SearchService(searchRepo);
+  const search = new SearchService(searchRepo, content);
   const backgrounds = new BackgroundService(backgroundRepo, users, storage);
 
   return {

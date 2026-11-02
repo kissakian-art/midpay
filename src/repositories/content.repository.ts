@@ -103,6 +103,15 @@ export class ContentRepository {
     return this.db.update(content).set(patch).where(eq(content.id, id)).returning().get();
   }
 
+  /** Recheck moderation and ownership in the write, not only before async I/O. */
+  updateOwned(id: string, userId: string, patch: Partial<Content>): Promise<Content | undefined> {
+    return this.db.update(content).set(patch).where(sql`${content.id} = ${id}
+      and ${content.status} in ('draft', 'published', 'archived')
+      and exists (select 1 from ${creators} inner join ${users} on ${users.id} = ${creators.userId}
+        where ${creators.id} = ${content.creatorId} and ${creators.userId} = ${userId}
+        and ${creators.status} = 'active' and ${users.status} = 'active')`).returning().get();
+  }
+
   /**
    * Total seconds of a creator's FREE, non-deleted content (§4.5.3 allowance).
    * Photos/text have NULL duration and contribute 0, so this is effectively the

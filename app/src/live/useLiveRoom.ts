@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { liveChatWsUrl } from "../api";
+import { getLive, liveChatWsUrl } from "../api";
 
 /**
  * useLiveRoom — a thin React wrapper over the LiveRoom Durable Object socket
@@ -31,7 +31,7 @@ export interface LiveReaction {
   emoji: string;
 }
 
-export type LiveConnState = "connecting" | "open" | "closed";
+export type LiveConnState = "connecting" | "open" | "closed" | "ended" | "replaced";
 
 interface WireChat {
   type: "chat";
@@ -97,6 +97,12 @@ export function useLiveRoom(liveId: string | null, enabled: boolean) {
           return;
         }
         switch (msg.type) {
+          case "ended":
+            closedByUs = true;
+            setState("ended");
+            setViewers(0);
+            ws.close();
+            break;
           case "welcome": {
             const history = (msg.history ?? []).map<LiveChatMessage>((h) => ({
               id: nextId(),
@@ -136,8 +142,26 @@ export function useLiveRoom(liveId: string | null, enabled: boolean) {
         }
       };
 
-      const onDown = () => {
+      const onDown = async (event: { code?: number }) => {
+        if (event.code === 4000 || event.code === 4001 || event.code === 4003) {
+          closedByUs = true;
+          setState(event.code === 4001 ? "replaced" : "ended");
+          setViewers(0);
+        }
+        if (closedByUs) return;
         setState("closed");
+        // A refused handshake has no application close code. Check terminal
+        // state before reconnecting to an event that ended before we joined.
+        try {
+          const current = await getLive(liveId);
+          if (closedByUs) return;
+          if (["ended", "terminated", "cancelled"].includes(current.live.status)) {
+            closedByUs = true;
+            setState("ended");
+            setViewers(0);
+            return;
+          }
+        } catch { /* transient network failure: retry below */ }
         if (closedByUs) return;
         if (retry) clearTimeout(retry);
         retry = setTimeout(connect, RECONNECT_MS);

@@ -1,5 +1,6 @@
 import { integer, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { createdAt, ugx, updatedAt, uuidPk, uuidRef } from "./_shared";
+import { sql } from "drizzle-orm";
 
 /**
  * transactions — the immutable financial ledger (§3, §2.4). This is the single
@@ -60,6 +61,9 @@ export const transactions = sqliteTable(
   },
   (t) => [
     uniqueIndex("transactions_tx_ref_uq").on(t.flutterwaveTxRef),
+    uniqueIndex("transactions_open_content_uq").on(t.buyerId, t.contentId).where(sql`${t.paymentStatus} in ('pending', 'paid')`),
+    uniqueIndex("transactions_open_live_uq").on(t.buyerId, t.liveEventId).where(sql`${t.paymentStatus} in ('pending', 'paid')`),
+    uniqueIndex("transactions_provider_id_uq").on(t.flutterwaveFlwId),
     index("transactions_buyer_idx").on(t.buyerId),
     index("transactions_creator_idx").on(t.creatorId),
     index("transactions_status_idx").on(t.paymentStatus),

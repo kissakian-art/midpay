@@ -17,11 +17,9 @@ import {
   View,
 } from "react-native";
 import {
-  ApiError,
   authHeaders,
-  checkout,
-  devSettle,
   follow,
+  getCard,
   like,
   mediaUrl,
   recordView,
@@ -30,6 +28,7 @@ import {
   type FeedItem,
 } from "../api";
 import { useAuth } from "../auth";
+import { usePurchase } from "../usePurchase";
 import { cacheVideo, getCachedUri } from "../mediaCache";
 import { colors, ugx } from "../theme";
 import Avatar from "./Avatar";
@@ -79,7 +78,7 @@ function mmss(sec: number): string {
  * behind a buy overlay), with the right-rail actions (like/comment/DM).
  */
 export default function FeedItemView({
-  item,
+  item: initialItem,
   active,
   preload,
   height,
@@ -88,6 +87,8 @@ export default function FeedItemView({
   onOpenProfile,
   onOpenLive,
 }: Props) {
+  const [item, setItem] = useState(initialItem);
+  useEffect(() => { setItem(initialItem); }, [initialItem]);
   const { user } = useAuth();
   const { width } = useWindowDimensions();
   const isSelf = user?.id === item.creatorUserId;
@@ -102,7 +103,15 @@ export default function FeedItemView({
     return () => sub.remove();
   }, []);
   const [unlocked, setUnlocked] = useState(item.pricing === "free" || item.owned);
-  const [buying, setBuying] = useState(false);
+  const { buying, buy } = usePurchase("video_unlock", item.id, item.priceUgx ?? 0, () => {
+    // Locked discovery responses deliberately contain no paid text. Fetch the
+    // authorized card after settlement instead of displaying the redacted copy.
+    getCard(item.id).then(({ item: purchased }) => {
+      setItem(purchased);
+      setUnlocked(purchased.owned || purchased.pricing === "free");
+    }).catch(() => Alert.alert("Purchase confirmed", "Could not load your post. Tap unlock again to retry without paying again."));
+  });
+  useEffect(() => { setUnlocked(item.pricing === "free" || item.owned); }, [item.id, item.pricing, item.owned]);
   const [liked, setLiked] = useState(false);
   const [following, setFollowing] = useState(false);
   const [likeCount, setLikeCount] = useState(item.likeCount);
@@ -135,12 +144,12 @@ export default function FeedItemView({
     }
     // Play a locally-cached copy when we have one (no network, no auth header);
     // otherwise stream and let it be cached in the background for next time.
-    const cached = getCachedUri(item.id);
+    const cached = item.pricing === "free" ? getCachedUri(item.id) : null;
     const source: VideoSource = cached
       ? { uri: cached }
       : { uri: mediaUrl(item.id), headers: authHeaders() };
     player.replaceAsync(source).catch(() => {});
-  }, [unlocked, item.id, item.kind, player, preload]);
+  }, [unlocked, item.id, item.kind, item.pricing, player, preload]);
 
   // Cache a FREE video the first time it actually gets watched (becomes the
   // active cell), so repeat views skip the network. Paid videos are never
@@ -266,31 +275,6 @@ export default function FeedItemView({
       ScreenCapture.allowScreenCaptureAsync(tag).catch(() => {});
     };
   }, [item.pricing, item.id, unlocked, active]);
-
-  const buy = async () => {
-    setBuying(true);
-    try {
-      const r = await checkout("video_unlock", item.id);
-      if (r.simulated) {
-        // Dev mode: settle instantly via the webhook (no real money moves).
-        await devSettle(r.txRef, item.priceUgx ?? 0);
-        setUnlocked(true);
-      } else {
-        Alert.alert(
-          "Check your phone",
-          "Approve the Mobile Money prompt, then tap Unlock again to start watching.",
-        );
-      }
-    } catch (e) {
-      if (e instanceof ApiError && (e.code === "already_owned" || e.code === "already_paid")) {
-        setUnlocked(true);
-      } else {
-        Alert.alert("Purchase failed", e instanceof Error ? e.message : "Try again");
-      }
-    } finally {
-      setBuying(false);
-    }
-  };
 
   const toggleFollow = async () => {
     const next = !following;

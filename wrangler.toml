@@ -39,12 +39,12 @@ bucket_name = "midpay-media"
 # Cron: the §3.3 auto-terminate sweep — ends any live stream that has overrun
 # its declared duration + grace. Every 2 minutes.
 [triggers]
-crons = ["*/2 * * * *"]
+crons = ["*/2 * * * *", "17 3 * * *"]
 
 [vars]
 # 'development' enables dev conveniences (e.g. OTP code echoed in the response
 # for testing without SMS). Set to 'production' before going live.
-ENVIRONMENT = "development"
+ENVIRONMENT = "production"
 
 # Business-rule config constants (§3.3, §7.2). These are DEFAULTS only.
 # The live/effective values are stored in the versioned `platform_config` table

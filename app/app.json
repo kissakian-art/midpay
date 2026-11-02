@@ -6,7 +6,7 @@
     "version": "0.1.0",
     "scheme": "midpay",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/midpay-icon.png",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#000000",
     "ios": {
@@ -16,10 +16,8 @@
     "android": {
       "package": "com.kissakian.midpay",
       "adaptiveIcon": {
-        "backgroundColor": "#000000",
-        "foregroundImage": "./assets/android-icon-foreground.png",
-        "backgroundImage": "./assets/android-icon-background.png",
-        "monochromeImage": "./assets/android-icon-monochrome.png"
+        "backgroundColor": "#FFFFFF",
+        "foregroundImage": "./assets/midpay-icon.png"
       },
       "predictiveBackGestureEnabled": false
     },

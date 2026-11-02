@@ -10,6 +10,8 @@ import {
 } from "react-native";
 import { getMyAnalytics, type CreatorAnalytics } from "../api";
 import { colors, ugx } from "../theme";
+import CreatorWithdrawals from '../components/CreatorWithdrawals';
+import CreatorLiveStatement from '../components/CreatorLiveStatement';
 
 type Range = "day" | "week" | "all";
 const RANGES: { key: Range; label: string }[] = [
@@ -95,12 +97,13 @@ export default function CreatorAnalyticsScreen() {
           </View>
 
           <View style={s.walletRow}>
-            <Wallet label="Available now" value={data.earnings.availableUgx} highlight />
+            <Wallet label="Recorded balance" value={data.earnings.availableUgx} highlight />
             <Wallet label="On hold" value={data.earnings.heldUgx} />
             <Wallet label="Lifetime" value={data.earnings.lifetimeUgx} />
           </View>
 
           {/* Engagement totals */}
+          {data.isCreator && <CreatorWithdrawals />}
           <View style={s.totalsRow}>
             <Total label="Posts" value={data.totals.posts} />
             <Total label="Views" value={data.totals.views} />
@@ -117,7 +120,8 @@ export default function CreatorAnalyticsScreen() {
                   <Text style={s.rowTitle} numberOfLines={1}>
                     🔴 {l.title || "Live session"}
                   </Text>
-                  <Text style={s.rowStat}>👥 {l.peakViewers} peak</Text>
+                  <Text style={s.rowStat}>Peak chat connections: {l.peakViewers}</Text>
+                  <CreatorLiveStatement liveId={l.id} />
                 </View>
               ))}
             </>
@@ -148,7 +152,7 @@ export default function CreatorAnalyticsScreen() {
           )}
 
           <Text style={s.footnote}>
-            Earnings are your share after the platform fee, for the selected window. Free posts
+            Earnings are your share of confirmed sales during the selected period. Free posts
             aren't listed here — see the totals above for their reach.
           </Text>
         </>

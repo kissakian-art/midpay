@@ -4,7 +4,7 @@ import type { Env } from "../../env";
 import { AdminRepository } from "../../repositories/admin.repository";
 import { AuditRepository } from "../../repositories/audit.repository";
 import { ApiError, badRequest, conflict, forbidden, notFound } from "../errors";
-import { hashPassword, verifyPassword } from "../crypto";
+import { hashPassword, timingSafeEqual, verifyPassword } from "../crypto";
 import { generateTotpSecret, otpauthUri, verifyTotp } from "../totp";
 
 const ADMIN_SESSION_TTL_SECONDS = 60 * 60 * 8; // 8h admin session
@@ -30,19 +30,23 @@ export class AdminAuthService {
   ) {}
 
   /** First-run only: create the initial Super Admin when none exist. */
-  async bootstrap(email: string, password: string, displayName?: string): Promise<AdminView> {
+  async bootstrap(email: string, password: string, displayName?: string, bootstrapSecret?: string): Promise<AdminView> {
+    if (!this.env.ADMIN_BOOTSTRAP_SECRET || !bootstrapSecret || !timingSafeEqual(this.env.ADMIN_BOOTSTRAP_SECRET, bootstrapSecret)) {
+      throw forbidden("Bootstrap authorization required");
+    }
     if ((await this.admins.count()) > 0) {
       throw conflict("already_bootstrapped", "An admin already exists; ask a Super Admin to add you");
     }
     if (password.length < 10) {
       throw new ApiError(400, "weak_password", "Password must be at least 10 characters");
     }
-    const admin = await this.admins.create({
+    const admin = await this.admins.createInitial({
       email,
       displayName,
       passwordHash: await hashPassword(password),
       role: "super_admin",
     });
+    if (!admin) throw conflict("already_bootstrapped", "An admin already exists");
     await this.audit.record({ adminId: admin.id, action: "admin.bootstrap", targetType: "admin_user", targetId: admin.id });
     return view(admin);
   }

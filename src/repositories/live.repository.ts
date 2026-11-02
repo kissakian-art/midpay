@@ -1,4 +1,4 @@
-import { desc, eq, getTableColumns, sql } from "drizzle-orm";
+import { asc, desc, eq, getTableColumns, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { creators, liveEvents, users, type LiveEvent, type NewLiveEvent } from "../db/schema";
 
@@ -46,7 +46,7 @@ export class LiveRepository {
       .from(liveEvents)
       .innerJoin(creators, eq(creators.id, liveEvents.creatorId))
       .innerJoin(users, eq(users.id, creators.userId))
-      .where(eq(liveEvents.status, "live"))
+      .where(sql`${liveEvents.status} = 'live' and ${creators.status} = 'active' and ${users.status} = 'active'`)
       .orderBy(desc(liveEvents.startedAt))
       .all() as Promise<LiveEventWithCreator[]>;
   }
@@ -75,10 +75,36 @@ export class LiveRepository {
   ): Promise<LiveEvent | undefined> {
     return this.db
       .update(liveEvents)
-      .set({ status, ...patch })
+      .set({ status, ...patch, ...(["ended", "terminated", "cancelled"].includes(status) ? { shutdownPending: true } : {}) })
       .where(eq(liveEvents.id, id))
       .returning()
       .get();
+  }
+
+  startOwned(id: string, userId: string): Promise<LiveEvent | undefined> {
+    return this.db.update(liveEvents).set({ status: "live", startedAt: new Date() })
+      .where(sql`${liveEvents.id} = ${id} and ${liveEvents.status} = 'scheduled'
+        and exists (select 1 from ${creators} inner join ${users} on ${users.id} = ${creators.userId}
+          where ${creators.id} = ${liveEvents.creatorId} and ${users.id} = ${userId}
+          and ${creators.status} = 'active' and ${users.status} = 'active')`).returning().get();
+  }
+
+  finish(id: string, status: "ended" | "terminated"): Promise<LiveEvent | undefined> {
+    return this.db.update(liveEvents).set({ status, endedAt: new Date(), shutdownPending: true })
+      .where(sql`${liveEvents.id} = ${id} and ${liveEvents.status} in ('scheduled', 'live')`).returning().get();
+  }
+
+  pendingShutdowns(): Promise<LiveEvent[]> {
+    return this.db.select().from(liveEvents).where(eq(liveEvents.shutdownPending, true)).orderBy(asc(liveEvents.updatedAt)).limit(50).all();
+  }
+
+  deferShutdown(id: string): Promise<unknown> {
+    return this.db.update(liveEvents).set({ updatedAt: new Date() }).where(eq(liveEvents.id, id)).run();
+  }
+
+  acknowledgeShutdown(id: string): Promise<unknown> {
+    return this.db.update(liveEvents).set({ shutdownPending: false })
+      .where(sql`${liveEvents.id} = ${id} and ${liveEvents.status} in ('ended', 'terminated', 'cancelled')`).run();
   }
 
   incrementTicketsSold(id: string): Promise<unknown> {

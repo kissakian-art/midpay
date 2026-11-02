@@ -4,6 +4,7 @@ import { CreatorRepository } from "../repositories/creator.repository";
 import { SocialRepository, type UserSummary } from "../repositories/social.repository";
 import { UserRepository } from "../repositories/user.repository";
 import { badRequest, forbidden, notFound } from "./errors";
+import { contentView } from "./content-view";
 
 export interface PublicProfile {
   id: string;
@@ -84,14 +85,14 @@ export class SocialService {
   }
 
   /** A user's published posts, for the profile grid. */
-  listUserContent(userId: string) {
-    return this.content.listPublishedByUserId(userId);
+  async listUserContent(userId: string) {
+    return (await this.content.listPublishedByUserId(userId)).map(item => contentView(item));
   }
 
   // --- Likes ---
   private async liveContentOr404(contentId: string) {
     const item = await this.content.findById(contentId);
-    if (!item || item.status === "deleted") throw notFound("content");
+    if (!item || item.status !== "published") throw notFound("content");
     return item;
   }
 
@@ -131,6 +132,7 @@ export class SocialService {
   }
 
   async listComments(contentId: string, viewerId?: string | null) {
+    await this.liveContentOr404(contentId);
     const rows = await this.social.listComments(contentId);
     if (!viewerId) return rows.map((c) => ({ ...c, likedByMe: false }));
     const liked = await this.social.listLikedCommentIds(

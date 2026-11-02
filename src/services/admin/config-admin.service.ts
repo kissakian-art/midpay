@@ -3,6 +3,8 @@ import { AuditRepository } from "../../repositories/audit.repository";
 import { ConfigRepository } from "../../repositories/config.repository";
 import { badRequest, notFound } from "../errors";
 import { CONFIG_KEYS, configKeyDef, validateConfigValue } from "../config-keys";
+import { LIVE_PRICE_POLICY_KEY, POLICY_DEFAULTS, quotePolicy, validatePolicy } from "../live-price-policy";
+import { ExchangeRateService } from "../exchange-rate.service";
 
 export interface EffectiveConfig {
   key: string;
@@ -25,6 +27,29 @@ export class ConfigAdminService {
     private readonly audit: AuditRepository,
     private readonly env: Env,
   ) {}
+
+  async livePricing() {
+    const current = await this.config.currentlyEffective(LIVE_PRICE_POLICY_KEY, new Date());
+    return { active: current ? JSON.parse(current.valueJson) : null, defaults: POLICY_DEFAULTS,
+      exchangeRate: await new ExchangeRateService(this.config).current(),
+      history: await this.config.history(LIVE_PRICE_POLICY_KEY) };
+  }
+
+  previewLivePricing(input: unknown, duration: number) {
+    const policy = validatePolicy(input);
+    return { policy, ...quotePolicy(policy, duration) };
+  }
+
+  async approveLivePricing(adminId: string, input: unknown, effectiveFromSec: number, automaticFx = false) {
+    const policy = validatePolicy(input);
+    quotePolicy(policy, 10080);
+    if (!Number.isSafeInteger(effectiveFromSec) || effectiveFromSec < Math.floor(Date.now() / 1000) || effectiveFromSec > Math.floor(Date.now() / 1000) + 366 * 86400) {
+      throw badRequest("invalid_effective_date", "Choose an effective time from now to one year ahead");
+    }
+    const fx = await new ExchangeRateService(this.config).approvalSnapshot(policy.usdToUgx, automaticFx);
+    await this.config.appendAuditedPolicy(adminId, JSON.stringify({ ...policy, fx }), new Date(effectiveFromSec * 1000));
+    return { policy, effectiveFrom: new Date(effectiveFromSec * 1000).toISOString() };
+  }
 
   private envNumber(envVar: keyof Env): number {
     return Number(JSON.parse(String(this.env[envVar] ?? "0")));

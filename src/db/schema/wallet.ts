@@ -1,5 +1,6 @@
 import { integer, sqliteTable, text, uniqueIndex, index } from "drizzle-orm/sqlite-core";
 import { createdAt, ugx, updatedAt, uuidPk, uuidRef } from "./_shared";
+import { sql } from "drizzle-orm";
 
 /**
  * wallets — per-creator running balance (§7.5). The balance is a cached
@@ -55,7 +56,12 @@ export const walletEntries = sqliteTable(
     createdByAdminId: uuidRef("created_by_admin_id"),
     createdAt: createdAt(),
   },
-  (t) => [index("wallet_entries_wallet_idx").on(t.walletId, t.createdAt)],
+  (t) => [
+    index("wallet_entries_wallet_idx").on(t.walletId, t.createdAt),
+    uniqueIndex("wallet_entries_sale_uq").on(t.transactionId).where(sql`${t.type} = 'sale_credit'`),
+    uniqueIndex("wallet_entries_hold_uq").on(t.payoutId).where(sql`${t.type} = 'hold'`),
+    uniqueIndex("wallet_entries_completion_uq").on(t.payoutId).where(sql`${t.type} in ('release', 'payout_debit')`),
+  ],
 );
 
 /**

@@ -15,10 +15,14 @@ export interface Env {
   // 'development' | 'production' — gates dev-only conveniences (e.g. returning
   // the OTP code in the response so you can test without a live SMS provider).
   ENVIRONMENT: string;
+  SELF_SERVICE_WITHDRAWALS_ENABLED?: string;
+  WITHDRAWAL_FIXED_FEE_UGX?: string;
 
   // --- Secrets (set via `wrangler secret put`, NOT committed) ---
   // Signing key for session JWTs.
   JWT_SECRET: string;
+  // One-time bootstrap authorization; remove after creating the first admin.
+  ADMIN_BOOTSTRAP_SECRET?: string;
   // Flutterwave (§3.1). Optional in dev — payments run in a simulated mode
   // until these are set. Real STK Push + payouts need them.
   FLW_SECRET_KEY?: string;

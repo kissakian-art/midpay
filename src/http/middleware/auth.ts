@@ -16,9 +16,11 @@ export async function requireAuth(c: Context<AppEnv>, next: Next): Promise<void>
 
   try {
     const payload = await verify(token, c.env.JWT_SECRET, "HS256");
-    if (typeof payload.sub !== "string") {
+    if (typeof payload.sub !== "string" || (payload.typ !== undefined && payload.typ !== "user")) {
       throw new ApiError(401, "unauthorized", "Malformed token");
     }
+    const user = await c.get("container").users.findById(payload.sub);
+    if (!user || user.status !== "active") throw new ApiError(401, "account_disabled", "Account unavailable");
     c.set("userId", payload.sub);
   } catch (err) {
     if (err instanceof ApiError) throw err;
@@ -41,7 +43,9 @@ export async function getOptionalUserId(c: Context<AppEnv>): Promise<string | nu
   if (!token) return null;
   try {
     const payload = await verify(token, c.env.JWT_SECRET, "HS256");
-    return typeof payload.sub === "string" ? payload.sub : null;
+    if (typeof payload.sub !== "string" || (payload.typ !== undefined && payload.typ !== "user")) return null;
+    const user = await c.get("container").users.findById(payload.sub);
+    return user?.status === "active" ? user.id : null;
   } catch {
     return null;
   }

@@ -18,8 +18,10 @@ export async function requireAdmin(c: Context<AppEnv>, next: Next): Promise<void
     if (payload.typ !== "admin" || typeof payload.sub !== "string") {
       throw new ApiError(401, "unauthorized", "Not an admin token");
     }
+    const admin = await c.get("container").adminAuth.getById(payload.sub);
+    if (!admin || admin.status !== "active") throw new ApiError(401, "unauthorized", "Admin account unavailable");
     c.set("adminId", payload.sub);
-    c.set("adminRole", payload.role as AdminRole);
+    c.set("adminRole", admin.role);
   } catch (err) {
     if (err instanceof ApiError) throw err;
     throw new ApiError(401, "unauthorized", "Invalid or expired token");

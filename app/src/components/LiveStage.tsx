@@ -13,6 +13,7 @@ import {
 } from "react-native";
 import { useLiveRoom, type LiveReaction } from "../live/useLiveRoom";
 import { colors } from "../theme";
+import CreatorLiveStatement from './CreatorLiveStatement';
 
 const QUICK_REACTIONS = ["❤️", "🔥", "👏", "😂", "😮"];
 
@@ -61,6 +62,16 @@ export default function LiveStage({
     setDraft("");
   };
 
+  // Unmount LiveKit immediately on terminal chat notification. The server also
+  // disconnects participants, so this is UX rather than the security boundary.
+  if (state === "ended" || state === "replaced") {
+    return <View style={[s.root, { alignItems: "center", justifyContent: "center" }]}>
+      <Text style={{ color: colors.text, fontSize: 20 }}>{state === "ended" ? "This live has ended" : "Live opened on another device"}</Text>
+      {headerRight ?? null}
+      {roleBadge && <CreatorLiveStatement liveId={liveId} live />}
+    </View>;
+  }
+
   return (
     <View style={s.root}>
       {/* Video (placeholder in Phase A, real stream in Phase B) */}
@@ -74,7 +85,7 @@ export default function LiveStage({
             <Text style={s.liveBadgeText}>{roleBadge ?? "LIVE"}</Text>
           </View>
           <View style={s.viewerPill}>
-            <Text style={s.viewerText}>👁 {viewers}</Text>
+            <Text style={s.viewerText}>Chat: {viewers}</Text>
           </View>
         </View>
         {headerRight ?? null}
@@ -84,6 +95,8 @@ export default function LiveStage({
         @{creatorHandle}
         {title ? ` · ${title}` : ""}
       </Text>
+
+      {roleBadge && <CreatorLiveStatement liveId={liveId} live />}
 
       {/* Floating reactions */}
       <View pointerEvents="none" style={s.reactionLayer}>

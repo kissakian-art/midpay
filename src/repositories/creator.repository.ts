@@ -1,9 +1,14 @@
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { creators, type Creator, type NewCreator } from "../db/schema";
 
 export class CreatorRepository {
   constructor(private readonly db: Database) {}
+
+  setPayoutNetwork(userId: string, provider: 'mtn' | 'airtel') {
+    return this.db.update(creators).set({ payoutProvider: provider }).where(sql`${creators.userId}=${userId}
+      and not exists (select 1 from payouts where creator_id=${creators.id} and status in ('pending','held'))`).returning().get();
+  }
 
   findById(id: string): Promise<Creator | undefined> {
     return this.db.select().from(creators).where(eq(creators.id, id)).get();

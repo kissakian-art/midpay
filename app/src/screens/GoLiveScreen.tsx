@@ -24,6 +24,7 @@ import { useAuth } from "../auth";
 import LiveStage from "../components/LiveStage";
 import LiveVideoStage from "../live/LiveVideoStage";
 import { colors, ugx } from "../theme";
+import CreatorLiveStatement from '../components/CreatorLiveStatement';
 
 const DURATION_PRESETS = [15, 30, 60, 120];
 
@@ -38,7 +39,7 @@ const DURATION_PRESETS = [15, 30, 60, 120];
  */
 export default function GoLiveScreen({ navigation }: { navigation: any }) {
   const { user } = useAuth();
-  const [phase, setPhase] = useState<"form" | "ready" | "live">("form");
+  const [phase, setPhase] = useState<"form" | "ready" | "live" | "ended">("form");
   const [event, setEvent] = useState<LiveEvent | null>(null);
 
   const [title, setTitle] = useState("");
@@ -131,15 +132,22 @@ export default function GoLiveScreen({ navigation }: { navigation: any }) {
           setEnding(true);
           try {
             await endLive(event.id);
-          } catch {
-            // even if the call fails, leave the room; cron also auto-terminates
+            setPhase('ended');
+          } catch (e) {
+            Alert.alert('Unable to confirm broadcast ended', e instanceof Error ? e.message : 'Please retry');
           } finally {
-            navigation.goBack();
+            setEnding(false);
           }
         },
       },
     ]);
   };
+
+  if (phase === 'ended' && event) return <ScrollView style={{ flex: 1, backgroundColor: colors.bg }} contentContainerStyle={{ padding: 18 }}>
+    <Text style={{ color: colors.text, fontSize: 24 }}>Session complete</Text>
+    <CreatorLiveStatement liveId={event.id} live />
+    <TouchableOpacity onPress={() => navigation.goBack()}><Text style={{ color: colors.accent, padding: 16 }}>Done — withdrawals are in Your earnings</Text></TouchableOpacity>
+  </ScrollView>;
 
   if (phase === "live" && event) {
     return (
@@ -180,7 +188,7 @@ export default function GoLiveScreen({ navigation }: { navigation: any }) {
         <View style={s.readyCard}>
           <Row label="Duration" value={`${event.declaredDurationMin} min`} />
           <Row label="Ticket price" value={ugx(event.ticketPriceUgx)} />
-          <Row label="Price floor applied" value={ugx(event.priceFloorAppliedUgx)} />
+          <Row label="Your share after collection fees" value={event.creatorSplitBps == null ? 'Historical ticket tiers' : `${event.creatorSplitBps / 100}% (fixed)`} />
         </View>
         <Text style={s.readyNote}>
           Viewers pay the ticket once to join. The stream auto-ends at{" "}

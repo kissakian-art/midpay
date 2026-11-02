@@ -1,6 +1,6 @@
 import { and, desc, eq, lte } from "drizzle-orm";
 import type { Database } from "../db/client";
-import { platformConfig, type PlatformConfig } from "../db/schema";
+import { auditLog, platformConfig, type PlatformConfig } from "../db/schema";
 
 /**
  * ConfigRepository — writes and history for the versioned, effective-dated
@@ -10,6 +10,14 @@ import { platformConfig, type PlatformConfig } from "../db/schema";
  */
 export class ConfigRepository {
   constructor(private readonly db: Database) {}
+
+  async appendAuditedPolicy(adminId: string, valueJson: string, effectiveFrom: Date): Promise<void> {
+    await this.db.batch([
+      this.db.insert(platformConfig).values({ key: "LIVE_COST_PRICE_POLICY", valueJson, effectiveFrom, createdByAdminId: adminId }),
+      this.db.insert(auditLog).values({ adminId, action: "pricing.policy.approve", targetType: "platform_config",
+        targetId: "LIVE_COST_PRICE_POLICY", detailJson: JSON.stringify({ policy: JSON.parse(valueJson), effectiveFrom: effectiveFrom.toISOString() }) }),
+    ]);
+  }
 
   /** The row currently in effect for a key (latest effectiveFrom ≤ now). */
   currentlyEffective(key: string, now: Date): Promise<PlatformConfig | undefined> {
@@ -34,7 +42,7 @@ export class ConfigRepository {
     key: string;
     valueJson: string;
     effectiveFrom: Date;
-    createdByAdminId: string;
+    createdByAdminId: string | null;
   }): Promise<PlatformConfig> {
     return this.db.insert(platformConfig).values(row).returning().get();
   }

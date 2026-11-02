@@ -5,9 +5,10 @@
   "description": "Phase 1 backend for the premium pay-per-view video/live platform (Uganda). Cloudflare Workers + D1 + Drizzle.",
   "type": "module",
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --var ENVIRONMENT:development",
     "deploy": "wrangler deploy",
     "typecheck": "tsc --noEmit",
+    "test": "node --import ./tests/register.mjs --test tests/*.test.mjs",
     "db:generate": "drizzle-kit generate",
     "db:migrate:local": "wrangler d1 migrations apply midpay --local",
     "db:migrate:remote": "wrangler d1 migrations apply midpay --remote",

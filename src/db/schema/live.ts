@@ -31,6 +31,8 @@ export const liveEvents = sqliteTable(
     ticketPriceUgx: ugx("ticket_price_ugx").notNull(),
     // Snapshot of the enforced floor at scheduling time (audit trail).
     priceFloorAppliedUgx: ugx("price_floor_applied_ugx").notNull(),
+    // Null retains the historical per-purchase tier rules. New events fix this at scheduling.
+    creatorSplitBps: integer("creator_split_bps"),
 
     // 'scheduled' | 'live' | 'ended' | 'terminated' | 'cancelled'
     // 'terminated' = auto-ended by the runtime cap (§3.3.3).
@@ -43,6 +45,9 @@ export const liveEvents = sqliteTable(
     scheduledStartAt: integer("scheduled_start_at", { mode: "timestamp" }),
     startedAt: integer("started_at", { mode: "timestamp" }),
     endedAt: integer("ended_at", { mode: "timestamp" }),
+    // Transactional outbox: terminal state and external shutdown obligation
+    // are written together. Cron retries until both transports are closed.
+    shutdownPending: integer("shutdown_pending", { mode: "boolean" }).notNull().default(false),
 
     // Live economics tracking (§7.6 per-event economics). Small aggregates only;
     // the raw per-minute viewer firehose belongs in Analytics Engine, not D1.

@@ -3,6 +3,7 @@ import type { Database } from "../db/client";
 import { platformConfig } from "../db/schema";
 import type { Env } from "../env";
 import type { PricingConfig } from "./pricing";
+import { LIVE_PRICE_POLICY_KEY, validatePolicy } from "./live-price-policy";
 
 /**
  * ConfigService — resolves effective business-rule values (§7.2). Precedence:
@@ -16,6 +17,17 @@ export class ConfigService {
     private readonly db: Database,
     private readonly env: Env,
   ) {}
+
+  async livePricePolicy() {
+    const raw = await this.getRaw(LIVE_PRICE_POLICY_KEY);
+    return raw ? validatePolicy(JSON.parse(raw)) : null;
+  }
+
+  async withdrawalSettings() {
+    return { enabled: await this.getNumber("SELF_SERVICE_WITHDRAWALS_ENABLED", this.env.SELF_SERVICE_WITHDRAWALS_ENABLED ?? "0") === 1,
+      fixedFeeUgx: await this.getNumber("WITHDRAWAL_FIXED_FEE_UGX", this.env.WITHDRAWAL_FIXED_FEE_UGX ?? "0"),
+      minimumUgx: await this.minPayoutThresholdUgx(), percent: await this.withdrawalDutyPercent() };
+  }
 
   private async getRaw(key: string): Promise<string | undefined> {
     const row = await this.db
@@ -87,6 +99,7 @@ export class ConfigService {
 
   /** Is phone-OTP verification required at login? (0 = dev bypass.) */
   async phoneVerificationEnabled(): Promise<boolean> {
+    if (this.env.ENVIRONMENT !== "development") return true;
     return (
       (await this.getNumber("PHONE_VERIFICATION_ENABLED", this.env.PHONE_VERIFICATION_ENABLED)) !== 0
     );

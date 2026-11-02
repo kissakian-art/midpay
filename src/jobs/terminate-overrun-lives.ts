@@ -3,6 +3,9 @@ import type { Env } from "../env";
 import { AuditRepository } from "../repositories/audit.repository";
 import { LiveRepository } from "../repositories/live.repository";
 import { ConfigService } from "../services/config.service";
+import { CreatorRepository } from "../repositories/creator.repository";
+import { UserRepository } from "../repositories/user.repository";
+import { LiveShutdownService } from "../services/live-shutdown.service";
 
 /**
  * §3.3 runtime cap (hard requirement): a live stream auto-terminates at its
@@ -16,6 +19,9 @@ export async function terminateOverrunLives(env: Env): Promise<{ terminated: num
   const live = new LiveRepository(db);
   const audit = new AuditRepository(db);
   const config = new ConfigService(db, env);
+  const creators = new CreatorRepository(db);
+  const users = new UserRepository(db);
+  const shutdown = new LiveShutdownService(live, creators, env);
 
   const graceMin = await graceMinutes(config, env);
   const now = Date.now();
@@ -26,9 +32,13 @@ export async function terminateOverrunLives(env: Env): Promise<{ terminated: num
     if (!event.startedAt) continue;
     const deadline =
       event.startedAt.getTime() + (event.declaredDurationMin + graceMin) * 60_000;
-    if (now < deadline) continue;
+    const creator = await creators.findById(event.creatorId);
+    const owner = creator ? await users.findById(creator.userId) : undefined;
+    if (now < deadline && creator?.status === "active" && owner?.status === "active") continue;
 
-    await live.setStatus(event.id, "terminated", { endedAt: new Date(now) });
+    // A normal duration limit completes the service; account enforcement remains an exception.
+    const status = now >= deadline && creator?.status === 'active' && owner?.status === 'active' ? 'ended' : 'terminated';
+    if (!(await live.finish(event.id, status))) continue;
     await audit.record({
       action: "live.auto_terminate",
       targetType: "live_event",
@@ -41,6 +51,7 @@ export async function terminateOverrunLives(env: Env): Promise<{ terminated: num
     });
     terminated++;
   }
+  await shutdown.retryPending();
   return { terminated };
 }
 

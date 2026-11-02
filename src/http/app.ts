@@ -18,6 +18,7 @@ import { searchRoutes } from "./routes/search.routes";
 import { backgroundRoutes } from "./routes/backgrounds.routes";
 import { userRoutes } from "./routes/users.routes";
 import type { AppEnv } from "./types";
+import { authRateLimit } from "./middleware/auth-rate-limit";
 
 export function createApp(): Hono<AppEnv> {
   const app = new Hono<AppEnv>();
@@ -30,6 +31,7 @@ export function createApp(): Hono<AppEnv> {
     c.set("container", createContainer(c.env));
     await next();
   });
+  app.use("*", authRateLimit);
 
   // Admin web console — a self-contained single-page app (email+password+TOTP
   // login, then drives the /admin/* API). Static page; the API enforces auth.

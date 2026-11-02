@@ -5,6 +5,7 @@ import { EntitlementRepository } from "../../repositories/entitlement.repository
 import { LiveRepository } from "../../repositories/live.repository";
 import { ModerationRepository } from "../../repositories/moderation.repository";
 import { badRequest, notFound } from "../errors";
+import { LiveShutdownService } from "../live-shutdown.service";
 
 const REPORT_TARGETS = ["content", "live_event", "comment", "user"] as const;
 type ReportTarget = (typeof REPORT_TARGETS)[number];
@@ -22,6 +23,7 @@ export class ModerationService {
     private readonly entitlements: EntitlementRepository,
     private readonly live: LiveRepository,
     private readonly audit: AuditRepository,
+    private readonly shutdown: LiveShutdownService,
   ) {}
 
   // --- User-facing ---
@@ -121,11 +123,11 @@ export class ModerationService {
   async killLive(adminId: string, liveId: string, reason?: string): Promise<LiveEvent> {
     const event = await this.live.findById(liveId);
     if (!event) throw notFound("live event");
-    if (event.status !== "live" && event.status !== "scheduled") {
+    if (event.status !== "live" && event.status !== "scheduled" && event.status !== "terminated" && event.status !== "ended") {
       throw badRequest("bad_state", `cannot kill a ${event.status} event`);
     }
-    const updated = await this.live.setStatus(liveId, "terminated", { endedAt: new Date() });
-    if (!updated) throw notFound("live event");
+    await this.live.finish(liveId, "terminated");
+    await this.shutdown.close(liveId);
     await this.audit.record({
       adminId,
       action: "live.kill",
@@ -133,6 +135,6 @@ export class ModerationService {
       targetId: liveId,
       detail: { reason },
     });
-    return updated;
+    return (await this.live.findById(liveId))!;
   }
 }

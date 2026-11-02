@@ -22,3 +22,10 @@ export const otpChallenges = sqliteTable(
 );
 
 export type OtpChallenge = typeof otpChallenges.$inferSelect;
+
+/** Shared across Worker instances; keys are hashed IP/account identifiers. */
+export const authRateLimits = sqliteTable("auth_rate_limits", {
+  key: text("key").primaryKey(),
+  windowStart: integer("window_start").notNull(),
+  attempts: integer("attempts").notNull(),
+});

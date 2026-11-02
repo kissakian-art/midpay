@@ -331,9 +331,9 @@ export default function StudioScreen({ navigation }: { navigation: any }) {
         capture.uri,
         capture.kind === "photo" ? "image/jpeg" : "video/mp4",
       );
-      // Cover thumbnail: a photo is its own cover; a video gets its first frame.
+      // Never upload a paid photograph as a public sales cover.
       const thumbUri =
-        capture.kind === "photo" ? capture.uri : await makeVideoThumbnail(capture.uri);
+        capture.kind === "photo" ? (paid ? null : capture.uri) : await makeVideoThumbnail(capture.uri);
       if (thumbUri) await uploadThumbnail(content.id, thumbUri);
       setBusy("Publishing…");
       await publishContent(content.id);

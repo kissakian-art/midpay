@@ -3,6 +3,7 @@ import type { CreatorRepository } from "../repositories/creator.repository";
 import type { LiveRepository } from "../repositories/live.repository";
 import type { TransactionRepository } from "../repositories/transaction.repository";
 import type { WalletRepository } from "../repositories/wallet.repository";
+import { notFound } from './errors';
 
 export type AnalyticsRange = "day" | "week" | "all";
 
@@ -27,6 +28,20 @@ export class CreatorAnalyticsService {
     private readonly content: ContentRepository,
     private readonly live: LiveRepository,
   ) {}
+
+  async liveStatement(userId: string, eventId: string) {
+    const creator = await this.creators.findByUserId(userId);
+    const event = await this.live.findById(eventId);
+    if (!creator || !event || creator.id !== event.creatorId) throw notFound('live statement');
+    const groups = await this.transactions.liveStatementGroups(eventId);
+    const paid = groups.filter(g => g.status === 'paid');
+    const totals = paid.reduce((s, g) => ({ tickets: s.tickets + g.count, grossUgx: s.grossUgx + g.grossUgx,
+      feesUgx: s.feesUgx + g.feesUgx, netUgx: s.netUgx + g.netUgx, creatorUgx: s.creatorUgx + g.creatorUgx,
+      platformUgx: s.platformUgx + g.platformUgx }), { tickets: 0, grossUgx: 0, feesUgx: 0, netUgx: 0, creatorUgx: 0, platformUgx: 0 });
+    return { eventId, title: event.title, status: event.status, creatorSplitBps: event.creatorSplitBps,
+      ticketPriceUgx: event.ticketPriceUgx, totals, groups, pendingPayments: groups.filter(g => g.status === 'pending').reduce((s,g) => s+g.count,0),
+      eligibleAfterSession: event.status === 'ended' };
+  }
 
   async forUser(userId: string, range: AnalyticsRange) {
     const creator = await this.creators.findByUserId(userId);

@@ -5,6 +5,7 @@ import { OtpRepository } from "../repositories/otp.repository";
 import { UserRepository } from "../repositories/user.repository";
 import { ConfigService } from "./config.service";
 import { hashPassword, randomNumericCode, sha256Hex, timingSafeEqual, verifyPassword } from "./crypto";
+import { ApiError } from "./errors";
 
 const OTP_TTL_MS = 5 * 60 * 1000; // 5 minutes
 const OTP_MAX_ATTEMPTS = 5;
@@ -28,9 +29,8 @@ export class AuthError extends Error {
 /**
  * AuthService — phone-based OTP login/signup (§3.1 phone-centric identity).
  *
- * SMS delivery: Phase-1 scaffold has no SMS provider wired, so the code is
- * logged (and, in development, returned to the caller) instead of texted. Swap
- * `sendSms` for a real provider (e.g. Africa's Talking / Twilio) at launch.
+ * SMS remains unconfigured. Codes are returned only in explicit development;
+ * production signup and OTP endpoints fail closed until an adapter is added.
  */
 export class AuthService {
   constructor(
@@ -41,46 +41,47 @@ export class AuthService {
   ) {}
 
   private isDev(): boolean {
-    return this.env.ENVIRONMENT !== "production";
+    return this.env.ENVIRONMENT === "development";
   }
 
   private async sendSms(phone: string, code: string): Promise<void> {
-    // TODO(launch): integrate a Ugandan SMS/OTP provider. For now, log only.
-    console.log(`[otp] would send code ${code} to ${phone}`);
+    // A real SMS adapter is required for production. Never log codes or phones.
+    void phone;
+    void code;
+    if (!this.isDev()) throw new ApiError(503, "sms_unconfigured", "Phone verification is not configured yet");
   }
 
   // --- Mobile + password auth (primary; OTP kept for legacy/transition) ---
 
-  /** Register with a mobile number + password. Also "claims" a legacy OTP-only
-   *  account (one with no password yet) by setting its first password. */
+  /** A first password can only be set after proving ownership of the phone. */
   async signup(
     phoneRaw: string,
     password: string,
+    code?: string,
   ): Promise<{ token: string; user: User; isNew: boolean }> {
     const phone = normalizePhone(phoneRaw);
+    if (!this.isDev()) throw new ApiError(503, "sms_unconfigured", "Signup requires phone verification, which is not configured yet");
     if (!password || password.length < 6) {
       throw new AuthError("weak_password", "Password must be at least 6 characters.");
     }
     const now = new Date();
     const existing = await this.users.findByPhone(phone);
+    if (existing?.passwordHash) {
+      throw new AuthError("already_registered", "This number is already registered. Log in instead.");
+    }
+    if (existing && existing.status !== "active") throw new AuthError("account_disabled", "Account unavailable.");
+    // Legacy accounts always require a real challenge, even in bypass mode.
+    const verified = await this.provePhone(phone, code, !!existing);
     if (existing) {
-      if (existing.passwordHash) {
-        throw new AuthError("already_registered", "This number is already registered. Log in instead.");
-      }
-      if (existing.status !== "active") {
-        throw new AuthError("account_disabled", `Account is ${existing.status}.`);
-      }
-      const updated = await this.users.update(existing.id, {
-        passwordHash: await hashPassword(password),
-        phoneVerifiedAt: existing.phoneVerifiedAt ?? now,
-      });
-      return { token: await this.issueToken(existing.id), user: updated ?? existing, isNew: false };
+      const updated = await this.users.setFirstPassword(existing.id, await hashPassword(password), now);
+      if (!updated) throw new AuthError("already_registered", "A password has already been set. Log in instead.");
+      return { token: await this.issueToken(existing.id), user: updated, isNew: false };
     }
     const user = await this.users.create({
       phone,
       handle: `user_${crypto.randomUUID().slice(0, 8)}`,
       passwordHash: await hashPassword(password),
-      phoneVerifiedAt: now,
+      phoneVerifiedAt: verified ? now : null,
     });
     return { token: await this.issueToken(user.id), user, isNew: true };
   }
@@ -93,7 +94,7 @@ export class AuthService {
     const phone = normalizePhone(phoneRaw);
     const user = await this.users.findByPhone(phone);
     if (user && !user.passwordHash) {
-      throw new AuthError("no_password", "No password set for this number yet — tap Sign up to create one.");
+      throw new AuthError("no_password", "Verify this number during signup to set your first password.");
     }
     const ok = user?.passwordHash ? await verifyPassword(password, user.passwordHash) : false;
     if (!user || !ok) throw new AuthError("invalid_credentials", "Wrong number or password.");
@@ -107,11 +108,14 @@ export class AuthService {
   ): Promise<{ challengeId: string; devCode?: string; bypass?: boolean }> {
     const phone = normalizePhone(phoneRaw);
 
-    // Verification disabled (admin config, dev only): no challenge, no SMS —
-    // the client can call verify with any code.
-    if (!(await this.config.phoneVerificationEnabled())) {
+    // Bypass only supports NEW development accounts. Legacy password setup
+    // still needs a challenge; it never trusts an arbitrary phone number.
+    const existing = await this.users.findByPhone(phone);
+    if (!(await this.config.phoneVerificationEnabled()) && !existing) {
       return { challengeId: "verification-disabled", bypass: true };
     }
+
+    if (!this.isDev()) throw new ApiError(503, "sms_unconfigured", "Phone verification is not configured yet");
 
     const code = randomNumericCode(6);
     const challenge = await this.otps.create({
@@ -134,12 +138,21 @@ export class AuthService {
   ): Promise<{ token: string; user: User; isNew: boolean }> {
     const phone = normalizePhone(phoneRaw);
     const now = new Date();
+    if (!this.isDev()) throw new ApiError(503, "sms_unconfigured", "Phone verification is not configured yet");
 
-    // Bypass mode (admin config PHONE_VERIFICATION_ENABLED=0, dev only): skip
-    // the code check entirely and log in / register the phone directly.
+    // Bypass mode never authenticates an arbitrary existing account.
     if (!(await this.config.phoneVerificationEnabled())) {
-      return this.loginOrRegister(phone, now);
+      throw new AuthError("otp_disabled", "Use mobile number and password to sign in.");
     }
+
+    await this.provePhone(phone, code, true);
+    return this.loginOrRegister(phone, now);
+  }
+
+  private async provePhone(phone: string, code: string | undefined, required: boolean): Promise<boolean> {
+    if (!required && !(await this.config.phoneVerificationEnabled())) return false;
+    if (!code) throw new AuthError("verification_required", "Request a verification code for this number first.");
+    const now = new Date();
 
     const challenge = await this.otps.findActiveByPhone(phone, now);
     if (!challenge) throw new AuthError("otp_not_found", "No active code; request a new one.");
@@ -149,15 +162,16 @@ export class AuthService {
 
     const ok = timingSafeEqual(challenge.codeHash, await sha256Hex(code));
     if (!ok) {
-      await this.otps.incrementAttempts(challenge.id, challenge.attempts + 1);
+      await this.otps.incrementAttempts(challenge.id);
       throw new AuthError("otp_invalid", "Incorrect code.");
     }
-    await this.otps.markConsumed(challenge.id, now);
-
-    return this.loginOrRegister(phone, now);
+    if (!(await this.otps.consume(challenge.id, now, OTP_MAX_ATTEMPTS))) {
+      throw new AuthError("otp_invalid", "Code has expired or was already used.");
+    }
+    return true;
   }
 
-  /** Shared find-or-create + token issue used by both verified and bypass paths. */
+  /** Shared find-or-create + token issue after a consumed OTP challenge. */
   private async loginOrRegister(
     phone: string,
     now: Date,
@@ -170,6 +184,8 @@ export class AuthService {
         handle: `user_${crypto.randomUUID().slice(0, 8)}`,
         phoneVerifiedAt: now,
       });
+    } else if (!user.phoneVerifiedAt) {
+      user = (await this.users.update(user.id, { phoneVerifiedAt: now })) ?? user;
     }
 
     if (user.status !== "active") {
@@ -183,7 +199,7 @@ export class AuthService {
   private issueToken(userId: string): Promise<string> {
     const nowSec = Math.floor(Date.now() / 1000);
     return sign(
-      { sub: userId, iat: nowSec, exp: nowSec + SESSION_TTL_SECONDS },
+      { sub: userId, typ: "user", iat: nowSec, exp: nowSec + SESSION_TTL_SECONDS },
       this.env.JWT_SECRET,
     );
   }
@@ -191,9 +207,8 @@ export class AuthService {
 
 /** Normalize UG numbers toward E.164-ish form. Lightweight; refine at launch. */
 export function normalizePhone(raw: string): string {
-  const trimmed = raw.replace(/[\s-]/g, "");
-  if (trimmed.startsWith("+")) return trimmed;
-  if (trimmed.startsWith("0")) return `+256${trimmed.slice(1)}`;
-  if (trimmed.startsWith("256")) return `+${trimmed}`;
-  return trimmed;
+  const trimmed = raw.replace(/[\s()-]/g, "");
+  const phone = trimmed.startsWith("0") ? `+256${trimmed.slice(1)}` : trimmed.startsWith("256") ? `+${trimmed}` : trimmed;
+  if (!/^\+256[37]\d{8}$/.test(phone)) throw new AuthError("invalid_phone", "Enter a valid Ugandan mobile number.");
+  return phone;
 }

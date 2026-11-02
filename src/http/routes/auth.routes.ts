@@ -3,7 +3,7 @@ import { notFound } from "../../services/errors";
 import { publicUser } from "../../services/auth.service";
 import { requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
-import { readJson, requireString } from "../util";
+import { optionalString, readJson, requireString } from "../util";
 
 export const authRoutes = new Hono<AppEnv>();
 
@@ -13,6 +13,7 @@ authRoutes.post("/signup", async (c) => {
   const { token, user, isNew } = await c.get("container").auth.signup(
     requireString(body, "phone"),
     requireString(body, "password"),
+    optionalString(body, "code"),
   );
   return c.json({ token, user: publicUser(user), isNew });
 });

@@ -4,7 +4,10 @@ import { EntitlementRepository } from "../repositories/entitlement.repository";
 import { LiveRepository, type LiveEventWithCreator } from "../repositories/live.repository";
 import { ConfigService } from "./config.service";
 import { badRequest, forbidden, notFound, unprocessable } from "./errors";
-import { minLivePrice, validateLivePrice } from "./pricing";
+import { minLivePrice } from "./pricing";
+import { UserRepository } from "../repositories/user.repository";
+import { LiveShutdownService } from "./live-shutdown.service";
+import { quotePolicy } from "./live-price-policy";
 
 export interface ScheduleLiveInput {
   title?: string;
@@ -33,6 +36,8 @@ export class LiveService {
     private readonly creators: CreatorRepository,
     private readonly config: ConfigService,
     private readonly entitlements: EntitlementRepository,
+    private readonly users: UserRepository,
+    private readonly shutdown: LiveShutdownService,
   ) {}
 
   private async requireActiveCreatorId(userId: string): Promise<string> {
@@ -52,8 +57,11 @@ export class LiveService {
       throw badRequest("bad_price", "ticketPriceUgx must be a positive integer");
     }
 
-    const cfg = await this.config.pricingConfig();
-    const check = validateLivePrice(input.ticketPriceUgx, input.declaredDurationMin, cfg);
+    const creator = await this.creators.findById(creatorId);
+    const creatorSplitBps = creator?.liveSplitBpsOverride ?? 6000;
+    if (!Number.isSafeInteger(creatorSplitBps) || creatorSplitBps < 0 || creatorSplitBps >= 10000) throw badRequest("invalid_split", "Creator share must leave a platform share");
+    const { floor } = await this.quoteFloor(input.declaredDurationMin, (creator?.liveSplitBpsOverride ?? 7000) / 100);
+    const check = { floor, ok: input.ticketPriceUgx >= floor };
     if (!check.ok) {
       // §3.3 hard block: ticket below the duration-scaled floor is rejected.
       throw unprocessable(
@@ -70,17 +78,29 @@ export class LiveService {
       declaredDurationMin: input.declaredDurationMin,
       ticketPriceUgx: input.ticketPriceUgx,
       priceFloorAppliedUgx: check.floor,
+      creatorSplitBps,
       status: "scheduled",
       scheduledStartAt: input.scheduledStartAt ? new Date(input.scheduledStartAt * 1000) : null,
     });
   }
 
   /** Preview the §3.3 floor for a duration without creating anything (UI helper). */
-  async quoteFloor(declaredDurationMin: number): Promise<{ floor: number }> {
+  async quoteForViewer(declaredDurationMin: number, userId: string | null) {
+    const creator = userId ? await this.creators.findByUserId(userId) : undefined;
+    return this.quoteFloor(declaredDurationMin, (creator?.liveSplitBpsOverride ?? 7000) / 100);
+  }
+
+  async quoteFloor(declaredDurationMin: number, creatorPercent = 70): Promise<{ floor: number }> {
     if (!Number.isInteger(declaredDurationMin) || declaredDurationMin <= 0) {
       throw badRequest("bad_duration", "declaredDurationMin must be a positive integer");
     }
     const cfg = await this.config.pricingConfig();
+    const policy = await this.config.livePricePolicy();
+    if (policy) {
+      // Never budget below the current collection fee or allowed live grace.
+      return { floor: quotePolicy({ ...policy, collectionPercent: Math.max(policy.collectionPercent, cfg.flutterwaveFeePercent),
+        graceMinutes: Math.max(policy.graceMinutes, await this.config.liveGraceMinutes()) }, declaredDurationMin, creatorPercent).floor };
+    }
     return { floor: minLivePrice(declaredDurationMin, cfg) };
   }
 
@@ -97,25 +117,37 @@ export class LiveService {
     if (event.status !== "scheduled") {
       throw badRequest("bad_state", `cannot start a ${event.status} event`);
     }
-    return this.setStatusChecked(id, "live", { startedAt: new Date() });
+    const updated = await this.live.startOwned(id, userId);
+    if (!updated) throw forbidden("Live event or creator is no longer available");
+    return updated;
   }
 
   async end(id: string, userId: string): Promise<LiveEvent> {
     const event = await this.requireOwnedEvent(id, userId);
+    if (event.status === "ended" || event.status === "terminated") {
+      await this.shutdown.close(id);
+      return (await this.live.findById(id))!;
+    }
     if (event.status !== "live") {
       throw badRequest("bad_state", `cannot end a ${event.status} event`);
     }
-    return this.setStatusChecked(id, "ended", { endedAt: new Date() });
+    await this.live.finish(id, "ended");
+    await this.shutdown.close(id);
+    return (await this.live.findById(id))!;
   }
 
-  private async setStatusChecked(
-    id: string,
-    status: LiveEvent["status"],
-    patch: Partial<LiveEvent>,
-  ): Promise<LiveEvent> {
-    const updated = await this.live.setStatus(id, status, patch);
-    if (!updated) throw notFound("live event");
-    return updated;
+  /** Shared by video grants and chat (including a second check inside the DO). */
+  async requireAccess(id: string, userId: string): Promise<LiveEventForViewer> {
+    const event = await this.getForViewer(id, userId);
+    if (event.status !== "live" || !event.startedAt) throw forbidden("Live event is not broadcasting");
+    const deadline = event.startedAt.getTime() + (event.declaredDurationMin + await this.config.liveGraceMinutes()) * 60000;
+    if (Date.now() >= deadline) throw forbidden("Live event has reached its time limit");
+    const [creator, user, owner] = await Promise.all([
+      this.creators.findById(event.creatorId), this.users.findById(userId), this.users.findById(event.creatorUserId),
+    ]);
+    if (creator?.status !== "active" || user?.status !== "active" || owner?.status !== "active") throw forbidden("Account unavailable");
+    if (!event.owned) throw forbidden("Buy a ticket to join this live");
+    return event;
   }
 
   async get(id: string): Promise<LiveEvent> {

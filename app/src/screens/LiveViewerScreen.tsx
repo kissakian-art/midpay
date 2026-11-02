@@ -8,13 +8,11 @@ import {
   View,
 } from "react-native";
 import {
-  ApiError,
-  checkout,
-  devSettle,
   getLive,
   type LiveEventForViewer,
 } from "../api";
 import Avatar from "../components/Avatar";
+import { usePurchase } from "../usePurchase";
 import LiveStage from "../components/LiveStage";
 import LiveVideoStage from "../live/LiveVideoStage";
 import { Placeholder } from "./GoLiveScreen";
@@ -30,8 +28,8 @@ export default function LiveViewerScreen({ route, navigation }: { route: any; na
   const liveId: string = route.params.liveId;
   const [event, setEvent] = useState<LiveEventForViewer | null>(null);
   const [loading, setLoading] = useState(true);
-  const [buying, setBuying] = useState(false);
   const [unlocked, setUnlocked] = useState(false);
+  const { buying, buy } = usePurchase("live_ticket", liveId, event?.ticketPriceUgx ?? 0, () => setUnlocked(true));
 
   const load = useCallback(async () => {
     try {
@@ -50,31 +48,6 @@ export default function LiveViewerScreen({ route, navigation }: { route: any; na
   useEffect(() => {
     load();
   }, [load]);
-
-  const buy = async () => {
-    if (!event) return;
-    setBuying(true);
-    try {
-      const r = await checkout("live_ticket", event.id);
-      if (r.simulated) {
-        await devSettle(r.txRef, event.ticketPriceUgx);
-        setUnlocked(true);
-      } else {
-        Alert.alert(
-          "Check your phone",
-          "Approve the Mobile Money prompt, then tap Join again to enter the live.",
-        );
-      }
-    } catch (e) {
-      if (e instanceof ApiError && (e.code === "already_owned" || e.code === "already_paid")) {
-        setUnlocked(true);
-      } else {
-        Alert.alert("Purchase failed", e instanceof Error ? e.message : "Try again");
-      }
-    } finally {
-      setBuying(false);
-    }
-  };
 
   if (loading || !event) {
     return (

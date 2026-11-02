@@ -3,9 +3,13 @@ import { badRequest } from "../../services/errors";
 import type { WebhookPayload } from "../../services/payments/payments.service";
 import { requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
-import { optionalString, readJson, requireString } from "../util";
+import { optionalString, readJson, requireParam, requireString } from "../util";
 
 export const paymentsRoutes = new Hono<AppEnv>();
+
+paymentsRoutes.get("/:id/status", requireAuth, async (c) => {
+  return c.json(await c.get("container").payments.status(c.get("userId"), requireParam(c, "id")));
+});
 
 // Start a purchase — creates a pending ledger row and fires the STK Push (§3.1).
 paymentsRoutes.post("/checkout", requireAuth, async (c) => {

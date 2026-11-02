@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { verify } from "hono/jwt";
-import { ApiError, badRequest, forbidden } from "../../services/errors";
+import { ApiError, badRequest } from "../../services/errors";
 import { mintLiveKitToken } from "../../services/livekit";
 import { getOptionalUserId, requireAuth } from "../middleware/auth";
 import type { AppEnv } from "../types";
@@ -20,7 +20,7 @@ liveRoutes.get("/:id/chat", async (c) => {
   let userId: string;
   try {
     const payload = await verify(token, c.env.JWT_SECRET, "HS256");
-    if (typeof payload.sub !== "string") throw new Error("bad sub");
+    if (typeof payload.sub !== "string" || (payload.typ !== undefined && payload.typ !== "user")) throw new Error("bad sub");
     userId = payload.sub;
   } catch {
     throw new ApiError(401, "unauthorized", "Invalid or expired token");
@@ -28,10 +28,7 @@ liveRoutes.get("/:id/chat", async (c) => {
 
   const eventId = requireParam(c, "id");
   const { live, users } = c.get("container");
-  const event = await live.get(eventId); // 404 if missing
-  if (event.status !== "live" && event.status !== "scheduled") {
-    throw badRequest("not_live", `Event is ${event.status}`);
-  }
+  await live.requireAccess(eventId, userId);
   const user = await users.findById(userId);
   if (!user || user.status !== "active") throw new ApiError(401, "unauthorized", "Account unavailable");
 
@@ -54,7 +51,8 @@ liveRoutes.get("/:id/chat/stats", async (c) => {
 // Public — preview the §3.3 price floor for a declared duration (UI helper).
 liveRoutes.post("/quote-floor", async (c) => {
   const body = await readJson(c);
-  const quote = await c.get("container").live.quoteFloor(requireInt(body, "declaredDurationMin"));
+  const quote = await c.get("container").live.quoteForViewer(requireInt(body, "declaredDurationMin"), await getOptionalUserId(c));
+  c.header("Cache-Control", "private, no-store");
   return c.json(quote);
 });
 
@@ -104,14 +102,7 @@ liveRoutes.post("/:id/end", async (c) => {
 liveRoutes.post("/:id/token", async (c) => {
   const userId = c.get("userId");
   const container = c.get("container");
-  const event = await container.live.getForViewer(c.req.param("id"), userId);
-  if (event.status !== "live") {
-    throw badRequest("not_live", `Event is ${event.status}`);
-  }
-  // owned = the broadcaster themselves OR a viewer holding a ticket.
-  if (!event.owned) {
-    throw forbidden("Buy a ticket to join this live");
-  }
+  const event = await container.live.requireAccess(c.req.param("id"), userId);
 
   const { LIVEKIT_API_KEY, LIVEKIT_API_SECRET, LIVEKIT_URL } = c.env;
   if (!LIVEKIT_API_KEY || !LIVEKIT_API_SECRET || !LIVEKIT_URL) {
@@ -126,5 +117,8 @@ liveRoutes.post("/:id/token", async (c) => {
     name: user?.handle,
     grant: { room: event.id, canPublish: event.isOwner, canSubscribe: true },
   });
+  // Do not return a grant if a concurrent kill/end won while signing it.
+  await container.live.requireAccess(event.id, userId);
+  c.header("Cache-Control", "private, no-store");
   return c.json({ token, url: LIVEKIT_URL, canPublish: event.isOwner });
 });

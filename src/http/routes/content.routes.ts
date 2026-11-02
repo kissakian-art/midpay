@@ -6,6 +6,12 @@ import { optionalInt, optionalString, readJson, requireParam } from "../util";
 
 export const contentRoutes = new Hono<AppEnv>();
 
+// Metadata can include an entitled buyer's paid text. Never share its cache.
+contentRoutes.use("*", async (c, next) => {
+  c.header("Cache-Control", "private, no-store");
+  await next();
+});
+
 /** Read + clamp the music volume field (0..100), or undefined if absent. */
 function readMusicVolume(body: Record<string, unknown>): number | undefined {
   const v = optionalInt(body, "musicVolume");
@@ -39,27 +45,26 @@ contentRoutes.post("/:id/view", requireAuth, async (c) => {
   return c.body(null, 204);
 });
 
-// Public — the post's cover thumbnail (video first-frame / photo). Always
-// public, even for paid content: the thumbnail is the sales cover, not the
-// paywalled media itself.
+// Public covers only. Paid photographs are withheld because legacy covers
+// contain the original full photograph; their media endpoint remains gated.
 contentRoutes.get("/:id/thumbnail", async (c) => {
   const object = await c.get("container").content.openThumbnail(c.req.param("id"));
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("content-length", String(object.size));
-  headers.set("cache-control", "public, max-age=300");
+  headers.set("cache-control", "no-store");
   return new Response(object.body, { status: 200, headers });
 });
 
 // Public — fetch a single content item's metadata.
 contentRoutes.get("/:id", async (c) => {
-  const item = await c.get("container").content.getForViewer(c.req.param("id"));
+  const item = await c.get("container").content.getForViewer(c.req.param("id"), await getOptionalUserId(c));
   return c.json({ content: item });
 });
 
 // Public — a single item in full feed shape (to open a post from search).
 contentRoutes.get("/:id/card", async (c) => {
-  const item = await c.get("container").content.getCard(c.req.param("id"));
+  const item = await c.get("container").content.getCard(c.req.param("id"), await getOptionalUserId(c));
   return c.json({ item });
 });
 
@@ -88,6 +93,8 @@ contentRoutes.get("/:id/media", async (c) => {
   const headers = new Headers();
   object.writeHttpMetadata(headers);
   headers.set("accept-ranges", "bytes");
+  headers.set("cache-control", "private, no-store");
+  headers.set("x-content-type-options", "nosniff");
 
   // Only respond 206 when the CLIENT asked for a range. R2 may report a
   // `range` on the object even for a full read, so gate on the request.

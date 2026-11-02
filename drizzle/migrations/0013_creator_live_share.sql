@@ -1,0 +1,1 @@
+ALTER TABLE `live_events` ADD `creator_split_bps` integer;

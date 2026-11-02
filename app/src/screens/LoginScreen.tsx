@@ -12,7 +12,7 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { ApiError } from "../api";
+import { ApiError, requestOtp } from "../api";
 import { useAuth } from "../auth";
 import { TERMS_SECTIONS } from "../terms";
 import { colors } from "../theme";
@@ -23,6 +23,10 @@ export default function LoginScreen() {
   const [mode, setMode] = useState<"login" | "signup">("login");
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
+  const [codeRequested, setCodeRequested] = useState(false);
+  const [devCode, setDevCode] = useState<string | null>(null);
+  const [bypass, setBypass] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agreed, setAgreed] = useState(false);
@@ -31,6 +35,7 @@ export default function LoginScreen() {
   const canSubmit =
     phone.trim().length >= 4 &&
     password.length >= 6 &&
+    (mode !== "signup" || !codeRequested || bypass || /^\d{6}$/.test(code.trim())) &&
     (mode === "login" || agreed) &&
     !busy;
 
@@ -38,13 +43,23 @@ export default function LoginScreen() {
     setError(null);
     setBusy(true);
     try {
-      if (mode === "signup") await signup(phone.trim(), password);
-      else await login(phone.trim(), password);
+      if (mode === "signup") {
+        if (!codeRequested) {
+          const challenge = await requestOtp(phone.trim());
+          setCodeRequested(true);
+          setBypass(!!challenge.bypass);
+          setDevCode(challenge.devCode ?? null);
+          setBusy(false);
+          return;
+        }
+        await signup(phone.trim(), password, bypass ? undefined : code.trim());
+      } else await login(phone.trim(), password);
     } catch (e) {
       // "no_password" legacy accounts should sign up to set a password.
       if (e instanceof ApiError && e.code === "no_password") {
         setMode("signup");
-        setError("No password yet for this number — set one to continue.");
+        setCodeRequested(false);
+        setError("Verify your number to set your first password.");
       } else {
         setError(e instanceof ApiError ? e.message : "Network error — try again");
       }
@@ -63,15 +78,28 @@ export default function LoginScreen() {
         placeholderTextColor={colors.dim}
         keyboardType="phone-pad"
         value={phone}
-        onChangeText={setPhone}
+        editable={!busy}
+        onChangeText={(value) => { setPhone(value); setCodeRequested(false); setCode(""); setDevCode(null); setBypass(false); }}
         autoFocus
       />
+
+      {mode === "signup" && codeRequested && !bypass ? (
+        <>
+          <TextInput style={s.input} placeholder="Verification code" placeholderTextColor={colors.dim}
+            keyboardType="number-pad" value={code} onChangeText={setCode} maxLength={6} editable={!busy} />
+          {devCode ? <Text style={s.fine}>Development verification code: {devCode}</Text> : null}
+          <TouchableOpacity disabled={busy} onPress={() => { setCodeRequested(false); setCode(""); setDevCode(null); }}>
+            <Text style={s.link}>Request a new code</Text>
+          </TouchableOpacity>
+        </>
+      ) : null}
       <TextInput
         style={s.input}
         placeholder="Password"
         placeholderTextColor={colors.dim}
         secureTextEntry
         value={password}
+        editable={!busy}
         onChangeText={setPassword}
       />
 
@@ -103,7 +131,7 @@ export default function LoginScreen() {
         {busy ? (
           <ActivityIndicator color="#000" />
         ) : (
-          <Text style={s.btnText}>{mode === "signup" ? "Create account" : "Log in"}</Text>
+          <Text style={s.btnText}>{mode === "signup" ? (codeRequested ? "Create account" : "Verify number") : "Log in"}</Text>
         )}
       </TouchableOpacity>
 
@@ -136,8 +164,13 @@ export default function LoginScreen() {
       </Modal>
 
       <TouchableOpacity
+        disabled={busy}
         onPress={() => {
           setError(null);
+          setCodeRequested(false);
+          setCode("");
+          setDevCode(null);
+          setBypass(false);
           setMode((m) => (m === "login" ? "signup" : "login"));
         }}
       >

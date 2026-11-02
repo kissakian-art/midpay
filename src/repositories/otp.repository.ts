@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, isNull, lt, sql } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { otpChallenges, type OtpChallenge } from "../db/schema";
 
@@ -29,18 +29,18 @@ export class OtpRepository {
       .get();
   }
 
-  markConsumed(id: string, now: Date): Promise<unknown> {
+  consume(id: string, now: Date, maxAttempts: number): Promise<OtpChallenge | undefined> {
     return this.db
       .update(otpChallenges)
       .set({ consumedAt: now })
-      .where(eq(otpChallenges.id, id))
-      .run();
+      .where(and(eq(otpChallenges.id, id), isNull(otpChallenges.consumedAt), gt(otpChallenges.expiresAt, now), lt(otpChallenges.attempts, maxAttempts)))
+      .returning().get();
   }
 
-  incrementAttempts(id: string, attempts: number): Promise<unknown> {
+  incrementAttempts(id: string): Promise<unknown> {
     return this.db
       .update(otpChallenges)
-      .set({ attempts })
+      .set({ attempts: sql`${otpChallenges.attempts} + 1` })
       .where(eq(otpChallenges.id, id))
       .run();
   }

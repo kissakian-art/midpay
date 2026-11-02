@@ -1,9 +1,14 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import type { Database } from "../db/client";
 import { users, type NewUser, type User } from "../db/schema";
 
 export class UserRepository {
   constructor(private readonly db: Database) {}
+
+  setFirstPassword(id: string, passwordHash: string, phoneVerifiedAt: Date): Promise<User | undefined> {
+    return this.db.update(users).set({ passwordHash, phoneVerifiedAt })
+      .where(and(eq(users.id, id), isNull(users.passwordHash), eq(users.status, "active"))).returning().get();
+  }
 
   findById(id: string): Promise<User | undefined> {
     return this.db.select().from(users).where(eq(users.id, id)).get();

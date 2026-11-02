@@ -61,7 +61,8 @@ userRoutes.get("/:id", async (c) => {
 
 // A user's published posts (profile grid).
 userRoutes.get("/:id/content", async (c) => {
-  const content = await c.get("container").social.listUserContent(c.req.param("id"));
+  c.header("Cache-Control", "private, no-store");
+  const content = await c.get("container").content.listPublishedByUser(c.req.param("id"), await getOptionalUserId(c));
   return c.json({ content });
 });
 

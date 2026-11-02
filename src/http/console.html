@@ -171,6 +171,7 @@
     { id: "moderation", label: "Moderation", render: renderModeration },
     { id: "creators", label: "Creators", render: renderCreators },
     { id: "config", label: "Config", render: renderConfig },
+    { id: "pricing", label: "Pricing calculator", render: renderPricing },
     { id: "payouts", label: "Payouts", render: renderPayouts },
     { id: "account", label: "Account", render: renderAccount }
   ];
@@ -408,6 +409,64 @@
     $("cr-id").addEventListener("keydown", function (e) { if (e.key === "Enter") load(); });
   }
 
+  function renderPricing(view) {
+    view.innerHTML = '<p>Loading pricing policy…</p>';
+    api("/admin/pricing/live").then(function (res) {
+      view.innerHTML = "";
+      var form = el('<div><p>Estimate live ticket minimums. Defaults use LiveKit Ship overage rates checked 1 November 2026; the public exchange rate is fetched daily; fees, bitrate and overhead remain editable budgeting assumptions. Monthly allowances are not deducted. Include subscriptions, broadcaster usage, Cloudflare costs and taxes in overhead per ticket. Bitrate is a budget assumption, not an enforced quality limit.</p><p>Approval applies only to newly scheduled events. Existing tickets, event prices and earned balances remain unchanged. The legacy hourly floor applies until a policy becomes effective.</p></div>');
+      var labels = { usdToUgx: "Budget exchange rate (UGX per USD)", conversionPercent: "Currency conversion surcharge (%)", participantUsdPerMinute: "LiveKit USD per participant-minute", downstreamUsdPerGb: "LiveKit USD per outgoing GB", bitrateMbps: "Average total bitrate per viewer (Mbps)", networkOverheadPercent: "Network overhead (%)", graceMinutes: "Budgeted grace minutes", collectionPercent: "Collection fee (%)", collectionFixedUgx: "Fixed collection fee per ticket (UGX)", creatorPercent: "Budgeted creator share (%) — at least 70", overheadUgxPerTicket: "Other costs allocated per ticket (UGX)", reservePercent: "Cost reserve (%)", profitUgxPerTicket: "Desired platform profit per ticket (UGX)", blockMinutes: "Price block (15, 30 or 60 minutes)", roundingUgx: "Round minimum upward to (UGX)" };
+      var inputs = {}; var values = res.active || res.defaults;
+      var fx = res.exchangeRate || {};
+      values = Object.assign({}, values);
+      if (fx.available) values.usdToUgx = fx.rate;
+      var fxControls = el('<div><p><a href="https://www.exchangerate-api.com" target="_blank" rel="noopener noreferrer">Rates By Exchange Rate API</a> — USD/UGX reference rate, updated daily. Your conversion surcharge remains separate.</p><p class="fx-status"></p><label><input class="fx-manual" type="checkbox" /> Manual exchange-rate override</label></div>');
+      fxControls.querySelector(".fx-status").textContent = fx.available
+        ? '1 USD = ' + fx.rate + ' UGX. Provider update: ' + when(new Date(fx.asOf * 1000).toISOString()) + '. Retrieved: ' + when(new Date(fx.fetchedAt * 1000).toISOString()) + (fx.stale ? '. STALE: automatic approval blocked.' : '. Reference rate available.')
+        : 'No reference rate cached yet. Daily refresh runs at 03:17 UTC. Automatic approval is blocked until a rate is available; manual override is optional.';
+      form.appendChild(fxControls);
+      Object.keys(labels).forEach(function (key) {
+        var wrap = el('<div><label>' + esc(labels[key]) + '</label><input type="number" min="0" step="any" value="' + esc(values[key]) + '" /></div>');
+        inputs[key] = wrap.querySelector("input"); form.appendChild(wrap);
+      });
+      inputs.usdToUgx.disabled = true;
+      var manualFx = fxControls.querySelector(".fx-manual");
+      manualFx.onchange = function () {
+        inputs.usdToUgx.disabled = !manualFx.checked;
+        if (!manualFx.checked && fx.available) inputs.usdToUgx.value = fx.rate;
+      };
+      var controls = el('<div><label>Example event duration (minutes)</label><input class="duration" type="number" value="60" min="1" /><label>Effective date/time (your local time)</label><input class="effective" type="datetime-local" /><button class="preview">Calculate</button><button class="approve" disabled>Approve policy</button><div class="result"></div></div>');
+      form.appendChild(controls); view.appendChild(section("Live ticket pricing", form));
+      var result = controls.querySelector(".result"), approve = controls.querySelector(".approve"), previewed = null;
+      function policy() { var p = {}; Object.keys(inputs).forEach(function (k) { p[k] = inputs[k].value.trim() === "" ? null : Number(inputs[k].value); }); return p; }
+      form.addEventListener("input", function () { previewed = null; approve.disabled = true; });
+      controls.querySelector(".preview").onclick = function () {
+        var p = policy(); previewed = null; approve.disabled = true;
+        api("/admin/pricing/live/preview", { method: "POST", body: { policy: p, durationMinutes: Number(controls.querySelector(".duration").value) } }).then(function (r) {
+          if (JSON.stringify(p) !== JSON.stringify(policy())) return;
+          previewed = p; approve.disabled = state.role !== "super_admin" || (!manualFx.checked && (!fx.available || fx.stale));
+          result.innerHTML = '<p><strong>Suggested minimum: ' + ugx(r.floor) + '</strong></p><p>Budgeted minutes: ' + esc(r.billedMinutes) + '; data: ' + esc(r.dataGb.toFixed(3)) + ' GB; transport: $' + esc(r.transportUsd.toFixed(4)) + '; budget including reserve/profit: ' + ugx(Math.ceil(r.budgetUgx)) + '</p><p>Scheduling also protects against a higher configured collection fee, grace period or creator-specific share. This is a projection, not a guarantee of profit.</p>';
+        }).catch(function (e) { result.textContent = e.message; });
+      };
+      approve.onclick = function () {
+        if (!previewed) return;
+        var at = new Date(controls.querySelector(".effective").value).getTime();
+        if (!Number.isFinite(at) || at <= Date.now()) { toast("Choose a future effective date/time", true); return; }
+        if (!confirm("Approve these cost assumptions for newly scheduled events from the chosen time? Existing events remain unchanged.")) return;
+        approve.disabled = true;
+        api("/admin/pricing/live/approve", { method: "POST", body: { policy: previewed, effectiveFrom: Math.floor(at / 1000), automaticFx: !manualFx.checked } })
+          .then(function () { toast("Pricing policy scheduled"); renderPricing(view); })
+          .catch(function (e) { toast(e.message, true); approve.disabled = false; });
+      };
+      var history = el('<div></div>');
+      (res.history || []).forEach(function (h) {
+        var entry = el('<details><summary>' + esc(when(h.effectiveFrom)) + ' — approved by ' + esc(h.createdByAdminId) + '</summary><pre></pre></details>');
+        entry.querySelector("pre").textContent = JSON.stringify(JSON.parse(h.valueJson), null, 2); history.appendChild(entry);
+      });
+      view.appendChild(section("Approved policy history (including scheduled changes)", history));
+      if (fx.available) controls.querySelector(".preview").click();
+    }).catch(function (e) { if (!onAuthError(e)) view.textContent = e.message; });
+  }
+
   // ---------- Config ----------
   function renderConfig(view) {
     view.innerHTML = "";
@@ -455,6 +514,31 @@
   // ---------- Payouts ----------
   function renderPayouts(view) {
     view.innerHTML = "";
+    var recovery = el('<div><p class="muted">Oldest 50 pending purchases. Payments pending for over an hour need investigation. Verify checks the provider without charging again.</p><button>Refresh payments</button><div class="tableWrap"></div></div>');
+    view.appendChild(section("Payment recovery", recovery));
+    recovery.querySelector("button").onclick = loadPayments;
+    function loadPayments() {
+      var wrap = recovery.querySelector(".tableWrap");
+      wrap.textContent = "Loading…";
+      api("/admin/payments/pending").then(function (res) {
+        var tbl = el('<table><thead><tr><th>Transaction</th><th>Created</th><th>Amount</th><th>Attention</th><th></th></tr></thead><tbody></tbody></table>');
+        (res.payments || []).forEach(function (p) {
+          var tr = el('<tr><td class="mono">' + esc(p.id) + '</td><td>' + esc(when(p.createdAt)) + '</td><td>' + ugx(p.grossUgx) + '</td><td>' + (Date.now() - new Date(p.createdAt).getTime() > 3600000 ? 'Investigate delay' : 'Awaiting payment') + '</td><td><button>Verify payment</button></td></tr>');
+          var button = tr.querySelector("button");
+          button.onclick = function () {
+            button.disabled = true;
+            api("/admin/payments/" + encodeURIComponent(p.id) + "/verify", { method: "POST" })
+              .then(function (result) { toast("Payment: " + result.status + (result.reason ? " — " + result.reason : "")); loadPayments(); })
+              .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); })
+              .finally(function () { button.disabled = false; });
+          };
+          tbl.querySelector("tbody").appendChild(tr);
+        });
+        wrap.innerHTML = "";
+        if (!res.payments.length) wrap.textContent = "No pending purchases."; else wrap.appendChild(tbl);
+      }).catch(function (e) { if (!onAuthError(e)) wrap.textContent = e.message; });
+    }
+    loadPayments();
     var floatSec = section("Wallet float", el('<p class="muted">Loading…</p>')); view.appendChild(floatSec);
     api("/admin/payouts/float").then(function (f) {
       floatSec.innerHTML = "<h2>Wallet float</h2>";
@@ -489,16 +573,23 @@
           var v = el('<button class="ghost">View</button>'); v.onclick = function () { viewBatch(b.id); }; act.appendChild(v);
           if (b.status === "draft") { var ap = el("<button>Approve</button>"); ap.onclick = function () { batchAction(b.id, "approve", "Approve this batch?"); }; act.appendChild(ap); }
           if (b.status === "approved") { var ex = el('<button class="danger">Execute</button>'); ex.onclick = function () { batchAction(b.id, "execute", "Execute payouts now? This sends money."); }; act.appendChild(ex); }
+          if (b.status === "executing") { var rc = el('<button>Resume / reconcile</button>'); rc.onclick = function () { batchAction(b.id, "execute", "Check pending transfers and resume any payouts that have not been submitted?"); }; act.appendChild(rc); }
+          if (b.status === "executing") { var verify = el('<button>Verify transfers only</button>'); verify.onclick = function () { batchAction(b.id, "verify", "Verify up to 20 uncertain transfers? No new transfer will be submitted."); }; act.appendChild(verify); }
+          if (["draft", "approved", "executing"].indexOf(b.status) !== -1) { var cancel = el('<button class="danger">Cancel unsubmitted</button>'); cancel.onclick = function () { batchAction(b.id, "cancel-unsubmitted", "Release reservations that have not been submitted? Transfers already claimed remain held until verified. This does not close the batch."); }; act.appendChild(cancel); }
           body.appendChild(tr);
         });
         listWrap.innerHTML = ""; listWrap.appendChild(tbl);
       }).catch(function (e) { if (!onAuthError(e)) listWrap.innerHTML = '<p class="err">' + esc(e.message) + "</p>"; });
     }
+    var busyBatches = {};
     function batchAction(id, action, confirmMsg) {
+      if (busyBatches[id]) return;
       if (!confirm(confirmMsg)) return;
+      busyBatches[id] = true;
       api("/admin/payouts/batches/" + id + "/" + action, { method: "POST" })
-        .then(function () { toast("Batch " + action + "d"); loadBatches(); })
-        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); });
+          .then(function (res) { toast(action === "approve" ? "Batch approved" : action === "cancel-unsubmitted" ? "Unsubmitted reservations released; review remaining payouts" : "Batch: " + res.batch.status); loadBatches(); viewBatch(id); })
+        .catch(function (e) { if (!onAuthError(e)) toast(e.message, true); })
+        .finally(function () { delete busyBatches[id]; });
     }
     function viewBatch(id) {
       detail.innerHTML = '<p class="muted">Loading batch…</p>';
@@ -507,6 +598,10 @@
         detail.innerHTML = "";
         var head = statGrid([["Status", pill(b.status)], ["Total", ugx(b.totalAmountUgx)], ["Payouts", String(b.payoutCount)], ["Threshold", ugx(b.minPayoutThresholdUgx)]]);
         var sec = section("Batch " + shortId(id), head);
+        sec.appendChild(el('<p class="muted">Pending: reserved, not submitted; execution may be blocked by account or destination changes. Held: submission claimed, outcome uncertain; verify before taking further action. Failed: inspect the reason below. Amount totals include cancelled reservations.</p>'));
+        payouts.forEach(function (p) {
+          if (p.status === "held" || p.failureReason) sec.appendChild(el('<p class="mono">' + esc(p.id) + ': ' + esc(p.failureReason || 'Awaiting provider confirmation — investigate if delayed') + '</p>'));
+        });
         if (payouts.length) {
           var tbl = el('<div class="tableWrap" style="margin-top:.75rem"><table><thead><tr><th>Creator</th><th>Gross</th><th>Duty</th><th>Net</th><th>To</th><th>Status</th></tr></thead><tbody></tbody></table></div>');
           payouts.forEach(function (p) { tbl.querySelector("tbody").appendChild(el('<tr><td class="mono">' + esc(shortId(p.creatorId)) + "</td><td>" + ugx(p.grossUgx) + "</td><td>" + ugx(p.withdrawalDutyUgx) + "</td><td>" + ugx(p.netUgx) + "</td><td>" + esc((p.payoutProvider || "") + " " + (p.payoutMsisdn || "")) + "</td><td>" + pill(p.status) + "</td></tr>")); });

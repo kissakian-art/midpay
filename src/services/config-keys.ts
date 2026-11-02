@@ -16,6 +16,8 @@ export interface ConfigKeyDef {
 }
 
 export const CONFIG_KEYS: ConfigKeyDef[] = [
+  { key: "SELF_SERVICE_WITHDRAWALS_ENABLED", envVar: "SELF_SERVICE_WITHDRAWALS_ENABLED", kind: "int", label: "Creator withdrawals enabled (0/1; enable only with funded payouts and confirmed fees)" },
+  { key: "WITHDRAWAL_FIXED_FEE_UGX", envVar: "WITHDRAWAL_FIXED_FEE_UGX", kind: "int", label: "Additional fixed withdrawal deduction (UGX)" },
   { key: "LIVE_MIN_PRICE_PER_HOUR", envVar: "LIVE_MIN_PRICE_PER_HOUR", kind: "int", label: "Live min price per hour (UGX)" },
   { key: "STREAMING_COST_PER_VIEWER_MINUTE", envVar: "STREAMING_COST_PER_VIEWER_MINUTE", kind: "int", label: "Streaming cost per viewer-minute (UGX)" },
   { key: "RECORDED_PRICE_FLOOR", envVar: "RECORDED_PRICE_FLOOR", kind: "int", label: "Recorded price floor (UGX)" },
@@ -38,6 +40,7 @@ export function configKeyDef(key: string): ConfigKeyDef | undefined {
 
 /** Validate a numeric value against a key's kind. Returns the coerced number. */
 export function validateConfigValue(def: ConfigKeyDef, value: unknown): number {
+  if (def.key === "SELF_SERVICE_WITHDRAWALS_ENABLED" && value !== 0 && value !== 1) throw new Error("Withdrawal switch must be 0 or 1");
   if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
     throw new Error(`${def.key} must be a non-negative number`);
   }

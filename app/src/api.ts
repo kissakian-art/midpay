@@ -136,10 +136,10 @@ export interface Message {
 }
 
 // --- Auth (mobile + password) ---
-export const signup = (phone: string, password: string) =>
+export const signup = (phone: string, password: string, code?: string) =>
   req<{ token: string; user: User; isNew: boolean }>("/auth/signup", {
     method: "POST",
-    json: { phone, password },
+    json: { phone, password, code },
   });
 
 export const loginPassword = (phone: string, password: string) =>
@@ -274,6 +274,21 @@ export interface CreatorAnalytics {
 export const getMyAnalytics = (range: "day" | "week" | "all" = "week") =>
   req<CreatorAnalytics>(`/creators/me/analytics?range=${range}`);
 
+export interface WithdrawalQuote { requestId: string; amountUgx: number; feeUgx: number; netUgx: number; phone: string; provider: string }
+export interface Withdrawal { id: string; amountUgx: number; feeUgx: number; netUgx: number; status: string; createdAt: string }
+export interface WithdrawalOverview { enabled: boolean; minimumUgx: number; percent: number; fixedFeeUgx: number; phone: string; provider: string | null; pendingLiveUgx: number; eligibleUgx: number; processingUgx: number; history: Withdrawal[] }
+export const getWithdrawals = () => req<WithdrawalOverview>('/creators/me/withdrawals');
+export const quoteWithdrawal = (amountUgx: number, provider: string) => req<WithdrawalQuote>('/creators/me/withdrawals/quote', { method: 'POST', json: { amountUgx, provider } });
+export const requestWithdrawal = (quote: WithdrawalQuote) => req<Withdrawal>('/creators/me/withdrawals', { method: 'POST', json: quote });
+export interface LiveStatement {
+  ticketPriceUgx: number;
+  eventId: string; status: string; creatorSplitBps: number | null; connectedViewers: number | null; sampledAt: string;
+  totals: { tickets: number; grossUgx: number; feesUgx: number; netUgx: number; creatorUgx: number; platformUgx: number };
+  groups: { status: string; creatorSplitBps: number; count: number; creatorUgx: number }[];
+  pendingPayments: number; eligibleAfterSession: boolean;
+}
+export const getLiveStatement = (id: string) => req<LiveStatement>(`/creators/me/live/${encodeURIComponent(id)}/statement`);
+
 // --- Text backgrounds (admin-uploaded catalog) ---
 export const backgroundImageUrl = (id: string) => `${API_URL}/backgrounds/${id}/image`;
 export const listBackgrounds = () => req<{ backgrounds: { id: string }[] }>("/backgrounds");
@@ -314,6 +329,8 @@ export interface SearchResults {
 export const search = (q: string) => req<SearchResults>(`/search?q=${encodeURIComponent(q)}`);
 
 // --- Payments ---
+export const paymentStatus = (transactionId: string) =>
+  req<{ status: "pending" | "paid" | "failed" | "refunded"; owned: boolean }>(`/payments/${transactionId}/status`);
 export const checkout = (type: "video_unlock" | "live_ticket", targetId: string) =>
   req<{ transactionId: string; txRef: string; simulated: boolean }>("/payments/checkout", {
     method: "POST",
@@ -334,6 +351,7 @@ export type LiveStatus = "scheduled" | "live" | "ended" | "terminated" | "cancel
 /** A live event (mirrors the backend `live_events` row). Timestamps arrive as
  *  ISO strings (Hono serializes Dates), or null. */
 export interface LiveEvent {
+  creatorSplitBps: number | null;
   id: string;
   creatorId: string;
   title: string | null;

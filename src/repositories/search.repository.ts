@@ -120,6 +120,8 @@ export class SearchRepository {
       .where(
         and(
           eq(content.status, "published"),
+          // Do not turn public search into an oracle for private paid text.
+          or(ne(content.kind, "text"), eq(content.pricing, "free")),
           or(like(content.title, term), like(content.description, term)),
         ),
       )

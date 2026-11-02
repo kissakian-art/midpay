@@ -15,6 +15,7 @@ adminRoutes.post("/bootstrap", async (c) => {
     requireString(body, "password"),
     // displayName is optional
     (body.displayName as string | undefined) ?? undefined,
+    c.req.header("x-bootstrap-secret"),
   );
   return c.json({ admin }, 201);
 });
@@ -60,6 +61,33 @@ adminRoutes.get("/me", requireAdmin, async (c) => {
 // --- Payouts (§7.5) — Finance + Super Admin ---
 const finance = [requireAdmin, requireRole("finance")] as const;
 
+adminRoutes.get("/pricing/live", ...finance, async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json(await c.get("container").configAdmin.livePricing());
+});
+adminRoutes.post("/pricing/live/preview", ...finance, async (c) => {
+  const body = await readJson(c);
+  return c.json(c.get("container").configAdmin.previewLivePricing(body.policy, Number(body.durationMinutes)));
+});
+adminRoutes.post("/pricing/live/approve", requireAdmin, requireRole(), async (c) => {
+  const body = await readJson(c);
+  if (body.automaticFx !== undefined && typeof body.automaticFx !== "boolean") throw badRequest("invalid_fx_mode", "automaticFx must be boolean");
+  return c.json(await c.get("container").configAdmin.approveLivePricing(c.get("adminId"), body.policy, Number(body.effectiveFrom), body.automaticFx === true));
+});
+
+adminRoutes.get("/payments/pending", ...finance, async (c) => {
+  c.header("Cache-Control", "private, no-store");
+  return c.json({ payments: await c.get("container").payments.pendingForFinance() });
+});
+
+adminRoutes.post("/payments/:id/verify", ...finance, async (c) => {
+  return c.json(await c.get("container").payments.verifyForFinance(c.get("adminId"), requireParam(c, "id")));
+});
+
+adminRoutes.post("/payouts/batches/:id/verify", ...finance, async (c) => {
+  return c.json(await c.get("container").payouts.verifyBatch(c.get("adminId"), requireParam(c, "id")));
+});
+
 // Float / reserve monitor.
 adminRoutes.get("/payouts/float", ...finance, async (c) => {
   return c.json(await c.get("container").payouts.floatSummary());
@@ -85,6 +113,10 @@ adminRoutes.get("/payouts/batches/:id", ...finance, async (c) => {
 adminRoutes.post("/payouts/batches/:id/approve", ...finance, async (c) => {
   const batch = await c.get("container").payouts.approveBatch(c.get("adminId"), requireParam(c, "id"));
   return c.json({ batch });
+});
+
+adminRoutes.post("/payouts/batches/:id/cancel-unsubmitted", ...finance, async (c) => {
+  return c.json(await c.get("container").payouts.cancelUnsubmitted(c.get("adminId"), requireParam(c, "id")));
 });
 
 adminRoutes.post("/payouts/batches/:id/execute", ...finance, async (c) => {
